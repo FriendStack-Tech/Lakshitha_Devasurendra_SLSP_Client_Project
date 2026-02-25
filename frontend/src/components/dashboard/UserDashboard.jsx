@@ -12,6 +12,7 @@ import { useAuth } from '../../context/AuthContext';
 import { orderService } from '../../services/orderService';
 import { userService } from '../../services/userService';
 import toast from 'react-hot-toast';
+import Loader from '../common/Loader';
 
 const EMPTY_FORM = {
   FullName: '', PhoneNumber: '', AddressLine1: '', AddressLine2: '',
@@ -236,7 +237,7 @@ const UserDashboard = () => {
   if (ordersLoading) return (
     <div className="ud-loading">
       <div className="ud-loading__spinner" />
-      <p>Loading your dashboard…</p>
+      <Loader message="Loading your dashboard" />;
     </div>
   );
 
