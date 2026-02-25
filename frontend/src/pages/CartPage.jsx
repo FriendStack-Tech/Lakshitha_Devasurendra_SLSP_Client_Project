@@ -60,6 +60,7 @@ const CheckoutDropdown = ({ cart, onOrderConfirmed }) => {
       toast.error('Please select a delivery address');
       return;
     }
+
     setPlacingOrder(true);
     try {
       const orderData = {
@@ -70,11 +71,16 @@ const CheckoutDropdown = ({ cart, onOrderConfirmed }) => {
         shippingAddress: formatAddress(selectedAddress),
         paymentMethod: 'Cash on Delivery',
       };
+
       const res = await orderService.createOrder(orderData);
-      const order = res.data?.data || res.data;
+
+      // ✅ Normalize backend response safely
+      const raw = res.data?.data || res.data;
+      const order = raw?.order || raw;
+
       setPlacedOrder(order);
       setStep('done');
-      onOrderConfirmed(); // clears cart
+      onOrderConfirmed();
       toast.success('Order placed successfully!');
     } catch (err) {
       toast.error(err?.response?.data?.message || 'Failed to place order');
@@ -237,11 +243,19 @@ const CheckoutDropdown = ({ cart, onOrderConfirmed }) => {
             <FiCheck size={28} />
           </div>
           <h4 className="co-drop__success-title">Order Placed!</h4>
-          {placedOrder && (
+          {/* {placedOrder && (
             <p className="co-drop__success-id">
               Order ID: <strong>{placedOrder._id || placedOrder.OrderID || '—'}</strong>
             </p>
-          )}
+          )} */}
+
+          <p className="co-drop__success-id">
+            Order ID:{' '}
+            <strong>
+              {placedOrder?.OrderID || placedOrder?.OrderNumber || 'Pending'}
+            </strong>
+          </p>
+
           <p className="co-drop__success-sub">
             Your order has been confirmed. Proceed to payment below.
           </p>
