@@ -14,6 +14,7 @@ const inventoryRoutes = require('./routes/inventoryRoutes');
 const paymentRoutes = require('./routes/paymentRoutes');
 const shippingRoutes = require('./routes/shippingRoutes');
 const reportRoutes = require('./routes/reportRoutes');
+const addressRoutes = require('./routes/addressRoutes');
 
 // Connect to database
 connectDB();
@@ -39,6 +40,7 @@ app.use('/api/inventory', inventoryRoutes);
 app.use('/api/payments', paymentRoutes);
 app.use('/api/shipping', shippingRoutes);
 app.use('/api/reports', reportRoutes);
+app.use('/api/addresses', addressRoutes);
 
 // Health check
 app.get('/health', (req, res) => {

@@ -1,17 +1,20 @@
 import React, { useState, useEffect } from 'react';
-import { motion } from 'framer-motion';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
   FiPackage, FiShoppingBag, FiUsers, FiDollarSign, 
   FiTrendingUp, FiAlertTriangle, FiRefreshCw, FiPlus,
-  FiEdit, FiTrash2, FiEye
+  FiEdit, FiTrash2, FiEye, FiFilter, FiX, FiChevronRight,
+  FiBarChart2, FiActivity
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
+import { useNavigate } from 'react-router-dom';
 import { productService } from '../../services/productService';
 import { orderService } from '../../services/orderService';
 import toast from 'react-hot-toast';
 
 const AdminDashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('overview');
   const [products, setProducts] = useState([]);
   const [orders, setOrders] = useState([]);
@@ -25,6 +28,11 @@ const AdminDashboard = () => {
     pendingOrders: 0
   });
 
+  const [showLowStock, setShowLowStock] = useState(false);
+  const [lowStockThreshold, setLowStockThreshold] = useState(10);
+  const [lowStockProducts, setLowStockProducts] = useState([]);
+  const [lowStockLoading, setLowStockLoading] = useState(false);
+
   useEffect(() => {
     fetchDashboardData();
   }, []);
@@ -34,17 +42,13 @@ const AdminDashboard = () => {
     try {
       const productsRes = await productService.getAllProducts();
       const ordersRes = await orderService.getOrders();
-      
       const productsData = productsRes.data.products || [];
       const ordersData = ordersRes.data.orders || [];
-      
       setProducts(productsData);
       setOrders(ordersData);
-
       const totalRevenue = ordersData
         .filter(order => order.OrderStatus === 'Delivered')
         .reduce((sum, order) => sum + order.TotalAmount, 0);
-
       setStats({
         totalProducts: productsData.length,
         totalOrders: ordersData.length,
@@ -54,7 +58,6 @@ const AdminDashboard = () => {
         pendingOrders: ordersData.filter(o => o.OrderStatus === 'Pending').length
       });
     } catch (error) {
-      console.error('Error fetching dashboard data:', error);
       toast.error('Failed to load dashboard data');
     } finally {
       setLoading(false);
@@ -74,399 +77,1010 @@ const AdminDashboard = () => {
     }
   };
 
+  const handleEditProduct = (productId) => {
+    navigate(`/admin/products/${productId}/edit`);
+  };
+
+  const handleFetchLowStock = async () => {
+    if (showLowStock) {
+      setShowLowStock(false);
+      setLowStockProducts([]);
+      return;
+    }
+    setLowStockLoading(true);
+    try {
+      const res = await productService.getLowStockProducts(lowStockThreshold);
+      setLowStockProducts(res.data.products || []);
+      setShowLowStock(true);
+    } catch (error) {
+      toast.error('Failed to fetch low stock products');
+    } finally {
+      setLowStockLoading(false);
+    }
+  };
+
+  const displayedProducts = showLowStock ? lowStockProducts : products;
+
   const tabs = [
-    { id: 'overview', name: 'Overview', icon: <FiTrendingUp /> },
+    { id: 'overview', name: 'Overview', icon: <FiActivity /> },
     { id: 'products', name: 'Products', icon: <FiPackage /> },
     { id: 'orders', name: 'Orders', icon: <FiShoppingBag /> },
   ];
 
-  const StatCard = ({ title, value, icon, color }) => (
-    <motion.div 
-      className="stat-card"
-      whileHover={{ y: -4 }}
-    >
-      <div className="stat-content">
-        <div>
-          <p className="stat-label">{title}</p>
-          <p className="stat-value">{value}</p>
-        </div>
-        <div className="stat-icon" style={{ color, background: `${color}20` }}>
-          {icon}
-        </div>
-      </div>
-
-      <style jsx>{`
-        .stat-card {
-          background: var(--color-white);
-          border-radius: var(--radius-lg);
-          padding: var(--spacing-lg);
-          box-shadow: var(--shadow-md);
-          transition: all var(--transition-base);
-          border-left: 4px solid ${color};
-        }
-
-        .stat-content {
-          display: flex;
-          align-items: center;
-          justify-content: space-between;
-        }
-
-        .stat-label {
-          color: var(--color-gray-600);
-          font-size: var(--font-size-sm);
-          margin-bottom: var(--spacing-xs);
-        }
-
-        .stat-value {
-          font-size: var(--font-size-2xl);
-          font-weight: 700;
-          color: var(--color-gray-900);
-        }
-
-        .stat-icon {
-          width: 48px;
-          height: 48px;
-          border-radius: 50%;
-          display: flex;
-          align-items: center;
-          justify-content: center;
-          font-size: var(--font-size-xl);
-        }
-      `}</style>
-    </motion.div>
-  );
+  const statCards = [
+    { title: 'Total Products', value: stats.totalProducts, icon: <FiPackage />, color: '#2E5A4C', bg: 'rgba(46,90,76,0.08)', trend: '+12%' },
+    { title: 'Total Orders', value: stats.totalOrders, icon: <FiShoppingBag />, color: '#C94F3F', bg: 'rgba(201,79,63,0.08)', trend: '+8%' },
+    { title: 'Revenue', value: `Rs. ${stats.totalRevenue.toLocaleString()}`, icon: <FiDollarSign />, color: '#10B981', bg: 'rgba(16,185,129,0.08)', trend: '+23%' },
+    { title: 'Customers', value: stats.totalCustomers, icon: <FiUsers />, color: '#3B82F6', bg: 'rgba(59,130,246,0.08)', trend: '+5%' },
+    { title: 'Low Stock', value: stats.lowStock, icon: <FiAlertTriangle />, color: '#F59E0B', bg: 'rgba(245,158,11,0.08)', clickable: true,
+      onClick: () => { setActiveTab('products'); setTimeout(() => handleFetchLowStock(), 100); } },
+    { title: 'Pending Orders', value: stats.pendingOrders, icon: <FiRefreshCw />, color: '#EF4444', bg: 'rgba(239,68,68,0.08)', trend: '-3%' },
+  ];
 
   if (loading) {
     return (
-      <div className="dashboard-loading">
-        <div className="spinner"></div>
-        <p>Loading dashboard...</p>
+      <div className="ad-loading">
+        <div className="ad-loading-inner">
+          <div className="ad-spinner" />
+          <p>Loading dashboard…</p>
+        </div>
+        <style>{`
+          .ad-loading {
+            min-height: 60vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+          }
+          .ad-loading-inner {
+            text-align: center;
+            color: #6b5c44;
+          }
+          .ad-spinner {
+            width: 44px;
+            height: 44px;
+            border: 3px solid rgba(200,135,42,0.2);
+            border-top-color: #C8872A;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+          }
+          @keyframes spin { to { transform: rotate(360deg); } }
+        `}</style>
       </div>
     );
   }
 
   return (
-    <div className="admin-dashboard">
-      <div className="dashboard-header">
-        <h1>Welcome back, {user?.Name}!</h1>
-        <p>Manage your spice empire from here</p>
+    <div className="ad">
+
+      {/* ── Hero Header ── */}
+      <div className="ad__hero">
+        <div className="ad__hero-glow" />
+        <div className="ad__hero-pattern" />
+        <div className="ad__hero-content">
+          <motion.span
+            className="ad__eyebrow"
+            initial={{ opacity: 0, y: 12 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5 }}
+          >
+            ✦ Admin Control Center
+          </motion.span>
+          <motion.h1
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.1 }}
+          >
+            Welcome back, <span className="ad__hero-name">{user?.Name}</span>
+          </motion.h1>
+          <motion.p
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.5, delay: 0.2 }}
+          >
+            Manage your spice empire from one place
+          </motion.p>
+        </div>
+        <motion.button
+          className="ad__refresh-btn"
+          onClick={fetchDashboardData}
+          whileHover={{ scale: 1.05 }}
+          whileTap={{ scale: 0.95 }}
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          transition={{ delay: 0.3 }}
+        >
+          <FiRefreshCw /> Refresh
+        </motion.button>
       </div>
 
-      {/* Tab Navigation */}
-      <div className="dashboard-tabs">
-        {tabs.map(tab => (
-          <button
+      {/* ── Tab Navigation ── */}
+      <div className="ad__tabs">
+        {tabs.map((tab, i) => (
+          <motion.button
             key={tab.id}
-            className={`tab-btn ${activeTab === tab.id ? 'active' : ''}`}
+            className={`ad__tab ${activeTab === tab.id ? 'ad__tab--active' : ''}`}
             onClick={() => setActiveTab(tab.id)}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ delay: i * 0.07 }}
+            whileHover={{ y: -1 }}
+            whileTap={{ scale: 0.97 }}
           >
-            {tab.icon}
-            <span>{tab.name}</span>
-          </button>
+            <span className="ad__tab-icon">{tab.icon}</span>
+            {tab.name}
+            {activeTab === tab.id && (
+              <motion.div className="ad__tab-indicator" layoutId="tabIndicator" />
+            )}
+          </motion.button>
         ))}
       </div>
 
-      {/* Overview Tab */}
-      {activeTab === 'overview' && (
-        <motion.div 
-          className="overview-tab"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        >
-          <div className="stats-grid">
-            <StatCard 
-              title="Total Products"
-              value={stats.totalProducts}
-              icon={<FiPackage />}
-              color="#2E5A4C"
-            />
-            <StatCard 
-              title="Total Orders"
-              value={stats.totalOrders}
-              icon={<FiShoppingBag />}
-              color="#C94F3F"
-            />
-            <StatCard 
-              title="Revenue"
-              value={`Rs. ${stats.totalRevenue.toLocaleString()}`}
-              icon={<FiDollarSign />}
-              color="#10B981"
-            />
-            <StatCard 
-              title="Customers"
-              value={stats.totalCustomers}
-              icon={<FiUsers />}
-              color="#3B82F6"
-            />
-            <StatCard 
-              title="Low Stock"
-              value={stats.lowStock}
-              icon={<FiAlertTriangle />}
-              color="#F59E0B"
-            />
-            <StatCard 
-              title="Pending Orders"
-              value={stats.pendingOrders}
-              icon={<FiRefreshCw />}
-              color="#EF4444"
-            />
-          </div>
+      {/* ── Overview Tab ── */}
+      <AnimatePresence mode="wait">
+        {activeTab === 'overview' && (
+          <motion.div
+            key="overview"
+            className="ad__tab-content"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.3 }}
+          >
+            {/* Stats Grid */}
+            <div className="ad__stats-grid">
+              {statCards.map((card, i) => (
+                <motion.div
+                  key={card.title}
+                  className={`ad__stat-card ${card.clickable ? 'ad__stat-card--clickable' : ''}`}
+                  style={{ '--card-color': card.color, '--card-bg': card.bg }}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: i * 0.07 }}
+                  whileHover={{ y: -5, boxShadow: `0 12px 32px ${card.bg}` }}
+                  onClick={card.onClick}
+                >
+                  <div className="ad__stat-top">
+                    <div className="ad__stat-icon-wrap">
+                      {card.icon}
+                    </div>
+                    {card.trend && (
+                      <span className={`ad__stat-trend ${card.trend.startsWith('+') ? 'up' : 'down'}`}>
+                        {card.trend}
+                      </span>
+                    )}
+                    {card.clickable && (
+                      <span className="ad__stat-action">View <FiChevronRight /></span>
+                    )}
+                  </div>
+                  <p className="ad__stat-value">{card.value}</p>
+                  <p className="ad__stat-label">{card.title}</p>
+                  <div className="ad__stat-bar" />
+                </motion.div>
+              ))}
+            </div>
 
-          {/* Recent Orders */}
-          <div className="recent-section">
-            <h2>Recent Orders</h2>
-            <div className="table-container">
-              <table>
+            {/* Recent Orders */}
+            <motion.div
+              className="ad__section"
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+            >
+              <div className="ad__section-header">
+                <h2><FiBarChart2 /> Recent Orders</h2>
+                <button className="ad__section-link" onClick={() => setActiveTab('orders')}>
+                  View all <FiChevronRight />
+                </button>
+              </div>
+              <div className="ad__table-wrap">
+                <table className="ad__table">
+                  <thead>
+                    <tr>
+                      <th>Order #</th>
+                      <th>Date</th>
+                      <th>Amount</th>
+                      <th>Status</th>
+                      <th>Action</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {orders.slice(0, 5).map((order, i) => (
+                      <motion.tr
+                        key={order.OrderID}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.55 + i * 0.05 }}
+                      >
+                        <td className="ad__td-mono">#{order.OrderNumber}</td>
+                        <td>{new Date(order.OrderDate).toLocaleDateString()}</td>
+                        <td className="ad__td-amount">Rs. {order.TotalAmount.toLocaleString()}</td>
+                        <td><span className={`ad__badge ad__badge--${order.OrderStatus?.toLowerCase()}`}>{order.OrderStatus}</span></td>
+                        <td>
+                          <button className="ad__action-btn ad__action-btn--view"><FiEye /></button>
+                        </td>
+                      </motion.tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+
+        {/* ── Products Tab ── */}
+        {activeTab === 'products' && (
+          <motion.div
+            key="products"
+            className="ad__tab-content"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="ad__section-header ad__section-header--top">
+              <h2><FiPackage /> Product Management</h2>
+              <motion.button
+                className="ad__primary-btn"
+                onClick={() => navigate('/admin/products/add')}
+                whileHover={{ scale: 1.03, y: -1 }}
+                whileTap={{ scale: 0.97 }}
+              >
+                <FiPlus /> Add Product
+              </motion.button>
+            </div>
+
+            {/* Filter Bar */}
+            <div className="ad__filter-bar">
+              <div className="ad__filter-left">
+                <FiFilter className="ad__filter-icon" />
+                <span className="ad__filter-label">Filter:</span>
+                <div className="ad__threshold-wrap">
+                  <label htmlFor="threshold">Low Stock ≤</label>
+                  <input
+                    id="threshold"
+                    type="number"
+                    min="1"
+                    value={lowStockThreshold}
+                    onChange={(e) => setLowStockThreshold(Number(e.target.value))}
+                    className="ad__threshold-input"
+                  />
+                </div>
+                <motion.button
+                  className={`ad__filter-btn ${showLowStock ? 'ad__filter-btn--active' : ''}`}
+                  onClick={handleFetchLowStock}
+                  disabled={lowStockLoading}
+                  whileHover={{ scale: 1.02 }}
+                  whileTap={{ scale: 0.97 }}
+                >
+                  {lowStockLoading
+                    ? <span className="ad__spinner-sm" />
+                    : <FiAlertTriangle />
+                  }
+                  {showLowStock ? 'Show All' : 'Low Stock'}
+                </motion.button>
+                <AnimatePresence>
+                  {showLowStock && (
+                    <motion.button
+                      className="ad__clear-btn"
+                      onClick={() => { setShowLowStock(false); setLowStockProducts([]); }}
+                      initial={{ opacity: 0, scale: 0.8 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.8 }}
+                      whileTap={{ scale: 0.95 }}
+                    >
+                      <FiX /> Clear
+                    </motion.button>
+                  )}
+                </AnimatePresence>
+              </div>
+              <AnimatePresence>
+                {showLowStock && (
+                  <motion.span
+                    className="ad__filter-badge"
+                    initial={{ opacity: 0, x: 10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: 10 }}
+                  >
+                    {lowStockProducts.length} product{lowStockProducts.length !== 1 ? 's' : ''} ≤ {lowStockThreshold}
+                  </motion.span>
+                )}
+              </AnimatePresence>
+            </div>
+
+            <div className="ad__table-wrap">
+              <table className="ad__table">
+                <thead>
+                  <tr>
+                    <th>ID</th>
+                    <th>Product Name</th>
+                    <th>Category</th>
+                    <th>Price</th>
+                    <th>Stock</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {displayedProducts.length === 0 ? (
+                    <tr>
+                      <td colSpan={7} className="ad__td-empty">
+                        <div className="ad__empty-state">
+                          <div className="ad__empty-icon"><FiPackage /></div>
+                          <p>{showLowStock ? 'No products below this threshold.' : 'No products found.'}</p>
+                        </div>
+                      </td>
+                    </tr>
+                  ) : (
+                    displayedProducts.map((product, i) => (
+                      <motion.tr
+                        key={product.ProductID}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: i * 0.04 }}
+                      >
+                        <td className="ad__td-mono">#{product.ProductID}</td>
+                        <td className="ad__td-bold">{product.ProductName}</td>
+                        <td><span className="ad__cat-chip">{product.Category}</span></td>
+                        <td className="ad__td-amount">Rs. {product.Price.toLocaleString()}</td>
+                        <td>
+                          <span className={`ad__stock-val ${product.StockQuantity <= lowStockThreshold ? 'ad__stock-val--low' : ''}`}>
+                            {product.StockQuantity <= lowStockThreshold && <FiAlertTriangle />}
+                            {product.StockQuantity}
+                          </span>
+                        </td>
+                        <td>
+                          <span className={`ad__badge ad__badge--${product.StockQuantity > 0 ? 'delivered' : 'cancelled'}`}>
+                            {product.StockQuantity > 0 ? 'In Stock' : 'Out of Stock'}
+                          </span>
+                        </td>
+                        <td>
+                          <div className="ad__actions">
+                            <motion.button
+                              className="ad__action-btn ad__action-btn--edit"
+                              title="Edit"
+                              onClick={() => handleEditProduct(product.ProductID)}
+                              whileHover={{ scale: 1.12 }}
+                              whileTap={{ scale: 0.9 }}
+                            ><FiEdit /></motion.button>
+                            <motion.button
+                              className="ad__action-btn ad__action-btn--delete"
+                              title="Delete"
+                              onClick={() => handleDeleteProduct(product.ProductID)}
+                              whileHover={{ scale: 1.12 }}
+                              whileTap={{ scale: 0.9 }}
+                            ><FiTrash2 /></motion.button>
+                          </div>
+                        </td>
+                      </motion.tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </motion.div>
+        )}
+
+        {/* ── Orders Tab ── */}
+        {activeTab === 'orders' && (
+          <motion.div
+            key="orders"
+            className="ad__tab-content"
+            initial={{ opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.3 }}
+          >
+            <div className="ad__section-header ad__section-header--top">
+              <h2><FiShoppingBag /> Order Management</h2>
+              <span className="ad__count-badge">{orders.length} total</span>
+            </div>
+            <div className="ad__table-wrap">
+              <table className="ad__table">
                 <thead>
                   <tr>
                     <th>Order #</th>
                     <th>Date</th>
+                    <th>Customer</th>
                     <th>Amount</th>
+                    <th>Payment</th>
                     <th>Status</th>
                     <th>Action</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {orders.slice(0, 5).map(order => (
-                    <tr key={order.OrderID}>
-                      <td>{order.OrderNumber}</td>
+                  {orders.map((order, i) => (
+                    <motion.tr
+                      key={order.OrderID}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: Math.min(i * 0.04, 0.4) }}
+                    >
+                      <td className="ad__td-mono">#{order.OrderNumber}</td>
                       <td>{new Date(order.OrderDate).toLocaleDateString()}</td>
-                      <td>Rs. {order.TotalAmount.toLocaleString()}</td>
+                      <td>{order.UserID}</td>
+                      <td className="ad__td-amount">Rs. {order.TotalAmount.toLocaleString()}</td>
                       <td>
-                        <span className={`badge badge-${order.OrderStatus?.toLowerCase()}`}>
+                        <span className={`ad__badge ad__badge--${order.payment?.PaymentStatus?.toLowerCase()}`}>
+                          {order.payment?.PaymentStatus}
+                        </span>
+                      </td>
+                      <td>
+                        <span className={`ad__badge ad__badge--${order.OrderStatus?.toLowerCase()}`}>
                           {order.OrderStatus}
                         </span>
                       </td>
                       <td>
-                        <button className="action-btn view">
-                          <FiEye />
-                        </button>
+                        <motion.button
+                          className="ad__action-btn ad__action-btn--view"
+                          whileHover={{ scale: 1.12 }}
+                          whileTap={{ scale: 0.9 }}
+                        ><FiEye /></motion.button>
                       </td>
-                    </tr>
+                    </motion.tr>
                   ))}
                 </tbody>
               </table>
             </div>
-          </div>
-        </motion.div>
-      )}
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Products Tab */}
-      {activeTab === 'products' && (
-        <motion.div 
-          className="products-tab"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        >
-          <div className="tab-header">
-            <h2>Product Management</h2>
-            <button className="btn btn-primary">
-              <FiPlus /> Add Product
-            </button>
-          </div>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@600;700&family=DM+Sans:wght@400;500;600&display=swap');
 
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Product ID</th>
-                  <th>Name</th>
-                  <th>Category</th>
-                  <th>Price</th>
-                  <th>Stock</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {products.map(product => (
-                  <tr key={product.ProductID}>
-                    <td>{product.ProductID}</td>
-                    <td>{product.ProductName}</td>
-                    <td>{product.Category}</td>
-                    <td>Rs. {product.Price.toLocaleString()}</td>
-                    <td>
-                      <span style={{
-                        color: product.StockQuantity <= 10 ? 'var(--color-error)' : 'inherit',
-                        fontWeight: product.StockQuantity <= 10 ? 700 : 'normal',
-                      }}>
-                        {product.StockQuantity}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge badge-${product.StockQuantity > 0 ? 'success' : 'danger'}`}>
-                        {product.StockQuantity > 0 ? 'In Stock' : 'Out of Stock'}
-                      </span>
-                    </td>
-                    <td>
-                      <div style={{ display: 'flex', gap: 'var(--spacing-sm)' }}>
-                        <button className="action-btn edit">
-                          <FiEdit />
-                        </button>
-                        <button 
-                          className="action-btn delete"
-                          onClick={() => handleDeleteProduct(product.ProductID)}
-                        >
-                          <FiTrash2 />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-      )}
-
-      {/* Orders Tab */}
-      {activeTab === 'orders' && (
-        <motion.div 
-          className="orders-tab"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-        >
-          <h2>Order Management</h2>
-          <div className="table-container">
-            <table>
-              <thead>
-                <tr>
-                  <th>Order #</th>
-                  <th>Date</th>
-                  <th>Customer</th>
-                  <th>Amount</th>
-                  <th>Payment</th>
-                  <th>Status</th>
-                  <th>Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {orders.map(order => (
-                  <tr key={order.OrderID}>
-                    <td>{order.OrderNumber}</td>
-                    <td>{new Date(order.OrderDate).toLocaleDateString()}</td>
-                    <td>{order.UserID}</td>
-                    <td>Rs. {order.TotalAmount.toLocaleString()}</td>
-                    <td>
-                      <span className={`badge badge-${order.payment?.PaymentStatus?.toLowerCase()}`}>
-                        {order.payment?.PaymentStatus}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`badge badge-${order.OrderStatus?.toLowerCase()}`}>
-                        {order.OrderStatus}
-                      </span>
-                    </td>
-                    <td>
-                      <button className="action-btn view">
-                        <FiEye />
-                      </button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </motion.div>
-      )}
-
-      <style jsx>{`
-        .admin-dashboard {
-          padding: var(--spacing-xl) 0;
+        .ad {
+          --amber: #C8872A;
+          --amber-d: #A06820;
+          --amber-l: #F5A94A;
+          --forest: #2E5A4C;
+          --forest-d: #1e3d33;
+          --dark: #1A1208;
+          --cream: #FDF8F0;
+          --cream-d: #f5ede0;
+          --red: #C94F3F;
+          font-family: 'DM Sans', sans-serif;
+          min-height: 100vh;
+          background: #f9f4ec;
+          padding: 0 0 80px;
         }
 
-        .dashboard-header {
-          margin-bottom: var(--spacing-2xl);
-        }
-
-        .dashboard-header h1 {
-          color: var(--color-secondary);
-          margin-bottom: var(--spacing-xs);
-        }
-
-        .dashboard-header p {
-          color: var(--color-gray-600);
-        }
-
-        .dashboard-tabs {
+        /* ── Hero ── */
+        .ad__hero {
+          position: relative;
+          background: linear-gradient(135deg, #1A1208 0%, #2E5A4C 55%, #3d6b5a 100%);
+          padding: 52px 40px 44px;
+          overflow: hidden;
           display: flex;
-          gap: var(--spacing-md);
-          margin-bottom: var(--spacing-xl);
-          border-bottom: 2px solid var(--color-gray-200);
-          padding-bottom: var(--spacing-md);
+          align-items: flex-start;
+          justify-content: space-between;
+          gap: 20px;
+          flex-wrap: wrap;
         }
-
-        .tab-btn {
-          display: flex;
+        .ad__hero-glow {
+          position: absolute;
+          inset: 0;
+          background: radial-gradient(ellipse at 80% 40%, rgba(200,135,42,0.22) 0%, transparent 65%);
+          pointer-events: none;
+        }
+        .ad__hero-pattern {
+          position: absolute;
+          inset: 0;
+          background-image: repeating-linear-gradient(
+            45deg,
+            transparent,
+            transparent 28px,
+            rgba(255,255,255,0.02) 28px,
+            rgba(255,255,255,0.02) 29px
+          );
+          pointer-events: none;
+        }
+        .ad__hero-content { position: relative; z-index: 1; }
+        .ad__eyebrow {
+          display: inline-block;
+          font-size: 0.72rem;
+          letter-spacing: 3px;
+          text-transform: uppercase;
+          color: var(--amber-l);
+          font-weight: 600;
+          margin-bottom: 10px;
+        }
+        .ad__hero h1 {
+          font-family: 'Playfair Display', Georgia, serif;
+          font-size: clamp(1.7rem, 4vw, 2.6rem);
+          color: #fff;
+          margin: 0 0 8px;
+          line-height: 1.2;
+        }
+        .ad__hero-name { color: var(--amber-l); }
+        .ad__hero p {
+          color: rgba(255,255,255,0.6);
+          font-size: 1rem;
+          margin: 0;
+        }
+        .ad__refresh-btn {
+          position: relative;
+          z-index: 1;
+          display: inline-flex;
           align-items: center;
-          gap: var(--spacing-sm);
-          padding: var(--spacing-sm) var(--spacing-lg);
-          border-radius: var(--radius-md);
-          color: var(--color-gray-600);
-          font-weight: 500;
-          transition: all var(--transition-fast);
+          gap: 8px;
+          padding: 10px 20px;
+          border-radius: 50px;
+          border: 1.5px solid rgba(255,255,255,0.2);
+          background: rgba(255,255,255,0.08);
+          color: rgba(255,255,255,0.85);
+          font-size: 0.88rem;
+          font-weight: 600;
+          cursor: pointer;
+          transition: all 0.2s;
+          backdrop-filter: blur(8px);
+          align-self: flex-start;
+          font-family: 'DM Sans', sans-serif;
+          margin-top: 4px;
+        }
+        .ad__refresh-btn:hover {
+          background: rgba(200,135,42,0.25);
+          border-color: var(--amber-l);
+          color: #fff;
         }
 
-        .tab-btn:hover {
-          background: var(--color-gray-100);
+        /* ── Tabs ── */
+        .ad__tabs {
+          display: flex;
+          gap: 4px;
+          padding: 20px 40px 0;
+          border-bottom: 2px solid rgba(200,135,42,0.12);
+          background: #fff;
+        }
+        .ad__tab {
+          position: relative;
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 12px 24px;
+          font-size: 0.92rem;
+          font-weight: 600;
+          color: #8a7055;
+          cursor: pointer;
+          border: none;
+          background: none;
+          font-family: 'DM Sans', sans-serif;
+          transition: color 0.2s;
+          border-radius: 8px 8px 0 0;
+        }
+        .ad__tab:hover { color: var(--amber-d); background: rgba(200,135,42,0.05); }
+        .ad__tab--active { color: var(--amber-d); }
+        .ad__tab-icon { font-size: 1rem; display: flex; align-items: center; }
+        .ad__tab-indicator {
+          position: absolute;
+          bottom: -2px;
+          left: 0; right: 0;
+          height: 2.5px;
+          background: linear-gradient(90deg, var(--amber), var(--amber-l));
+          border-radius: 2px 2px 0 0;
         }
 
-        .tab-btn.active {
-          background: var(--color-secondary);
-          color: var(--color-white);
+        /* ── Tab Content ── */
+        .ad__tab-content {
+          padding: 36px 40px;
+          max-width: 1400px;
+          margin: 0 auto;
         }
 
-        .stats-grid {
+        /* ── Stats Grid ── */
+        .ad__stats-grid {
           display: grid;
-          grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-          gap: var(--spacing-lg);
-          margin-bottom: var(--spacing-xl);
+          grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+          gap: 20px;
+          margin-bottom: 36px;
         }
-
-        .tab-header {
+        .ad__stat-card {
+          background: #fff;
+          border-radius: 16px;
+          padding: 24px;
+          cursor: default;
+          transition: all 0.25s;
+          border: 1.5px solid rgba(200,135,42,0.1);
+          box-shadow: 0 2px 12px rgba(26,18,8,0.05);
+          position: relative;
+          overflow: hidden;
+        }
+        .ad__stat-card::before {
+          content: '';
+          position: absolute;
+          top: 0; left: 0; right: 0;
+          height: 3px;
+          background: var(--card-color);
+          border-radius: 16px 16px 0 0;
+        }
+        .ad__stat-card--clickable { cursor: pointer; }
+        .ad__stat-top {
           display: flex;
           align-items: center;
           justify-content: space-between;
-          margin-bottom: var(--spacing-lg);
+          margin-bottom: 16px;
+        }
+        .ad__stat-icon-wrap {
+          width: 42px;
+          height: 42px;
+          border-radius: 12px;
+          background: var(--card-bg);
+          color: var(--card-color);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.1rem;
+        }
+        .ad__stat-trend {
+          font-size: 0.75rem;
+          font-weight: 700;
+          padding: 3px 8px;
+          border-radius: 50px;
+        }
+        .ad__stat-trend.up { background: rgba(16,185,129,0.1); color: #059669; }
+        .ad__stat-trend.down { background: rgba(239,68,68,0.1); color: #DC2626; }
+        .ad__stat-action {
+          display: inline-flex;
+          align-items: center;
+          gap: 2px;
+          font-size: 0.75rem;
+          font-weight: 600;
+          color: var(--card-color);
+          opacity: 0.8;
+        }
+        .ad__stat-value {
+          font-family: 'Playfair Display', Georgia, serif;
+          font-size: 1.8rem;
+          font-weight: 700;
+          color: var(--dark);
+          margin: 0 0 4px;
+          line-height: 1;
+        }
+        .ad__stat-label {
+          font-size: 0.82rem;
+          color: #8a7055;
+          margin: 0;
+          font-weight: 500;
+        }
+        .ad__stat-bar {
+          height: 3px;
+          background: var(--card-bg);
+          border-radius: 3px;
+          margin-top: 16px;
+          position: relative;
+          overflow: hidden;
+        }
+        .ad__stat-bar::after {
+          content: '';
+          position: absolute;
+          left: 0; top: 0; bottom: 0;
+          width: 60%;
+          background: var(--card-color);
+          border-radius: 3px;
+          opacity: 0.5;
         }
 
-        .action-btn {
-          padding: var(--spacing-sm);
-          border-radius: var(--radius-md);
-          transition: all var(--transition-fast);
-          color: var(--color-gray-600);
+        /* ── Section ── */
+        .ad__section {
+          background: #fff;
+          border-radius: 16px;
+          border: 1.5px solid rgba(200,135,42,0.1);
+          overflow: hidden;
+          box-shadow: 0 2px 12px rgba(26,18,8,0.05);
+        }
+        .ad__section-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: 20px 24px;
+          border-bottom: 1px solid rgba(200,135,42,0.1);
+        }
+        .ad__section-header h2 {
+          padding: 10px 24px;
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          font-family: 'Playfair Display', Georgia, serif;
+          font-size: 1.2rem;
+          color: var(--dark);
+          margin: 0;
+        }
+        .ad__section-header--top {
+          background: #fff;
+          border-radius: 16px 16px 0 0;
+          padding: 20px 24px;
+          border-bottom: none;
+          margin-bottom: 20px;
+        }
+        .ad__section-header--top h2 {
+          font-size: 1.35rem;
+        }
+        .ad__section-link {
+          display: inline-flex;
+          align-items: center;
+          gap: 4px;
+          font-size: 0.85rem;
+          font-weight: 600;
+          color: var(--amber-d);
+          cursor: pointer;
+          background: none;
+          border: none;
+          font-family: 'DM Sans', sans-serif;
+          transition: gap 0.2s;
+        }
+        .ad__section-link:hover { gap: 8px; }
+
+        /* ── Table ── */
+        .ad__table-wrap {
+          overflow-x: auto;
+          background: #fff;
+          border-radius: 16px;
+          border: 1.5px solid rgba(200,135,42,0.1);
+          box-shadow: 0 2px 12px rgba(26,18,8,0.05);
+        }
+        .ad__section .ad__table-wrap {
+          border-radius: 0;
+          border: none;
+          box-shadow: none;
+        }
+        .ad__table {
+          width: 100%;
+          border-collapse: collapse;
+          font-size: 0.9rem;
+        }
+        .ad__table thead tr {
+          background: #fdf8f0;
+          border-bottom: 1.5px solid rgba(200,135,42,0.12);
+        }
+        .ad__table th {
+          padding: 13px 18px;
+          text-align: left;
+          font-size: 0.75rem;
+          font-weight: 700;
+          letter-spacing: 1.2px;
+          text-transform: uppercase;
+          color: var(--amber);
+          white-space: nowrap;
+        }
+        .ad__table tbody tr {
+          border-bottom: 1px solid rgba(200,135,42,0.07);
+          transition: background 0.15s;
+        }
+        .ad__table tbody tr:last-child { border-bottom: none; }
+        .ad__table tbody tr:hover { background: rgba(200,135,42,0.03); }
+        .ad__table td { padding: 14px 18px; color: #3d2b0f; vertical-align: middle; }
+        .ad__td-mono { font-family: 'Courier New', monospace; font-size: 0.82rem; color: #8a7055; font-weight: 600; }
+        .ad__td-bold { font-weight: 600; color: var(--dark); }
+        .ad__td-amount { font-weight: 700; color: var(--forest); font-variant-numeric: tabular-nums; }
+        .ad__td-empty { padding: 60px 20px !important; }
+
+        /* ── Empty State ── */
+        .ad__empty-state {
+          text-align: center;
+          color: #8a7055;
+        }
+        .ad__empty-icon {
+          width: 56px; height: 56px;
+          margin: 0 auto 12px;
+          background: rgba(200,135,42,0.08);
+          border: 1.5px dashed rgba(200,135,42,0.3);
+          border-radius: 50%;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          font-size: 1.4rem;
+          color: var(--amber);
         }
 
-        .action-btn:hover {
-          background: var(--color-gray-100);
-          transform: scale(1.1);
+        /* ── Badges ── */
+        .ad__badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 4px 12px;
+          border-radius: 50px;
+          font-size: 0.75rem;
+          font-weight: 700;
+          letter-spacing: 0.3px;
+          white-space: nowrap;
+        }
+        .ad__badge--pending { background: rgba(245,158,11,0.15); color: #92400E; }
+        .ad__badge--processing { background: rgba(59,130,246,0.12); color: #1D4ED8; }
+        .ad__badge--shipped { background: rgba(46,90,76,0.12); color: var(--forest); }
+        .ad__badge--delivered { background: rgba(16,185,129,0.12); color: #065F46; }
+        .ad__badge--cancelled { background: rgba(239,68,68,0.12); color: #991B1B; }
+        .ad__badge--completed { background: rgba(16,185,129,0.12); color: #065F46; }
+        .ad__badge--failed { background: rgba(239,68,68,0.12); color: #991B1B; }
+        .ad__badge--paid { background: rgba(16,185,129,0.12); color: #065F46; }
+        .ad__badge--unpaid { background: rgba(245,158,11,0.15); color: #92400E; }
+
+        /* ── Category Chip ── */
+        .ad__cat-chip {
+          display: inline-block;
+          padding: 3px 10px;
+          border-radius: 6px;
+          font-size: 0.78rem;
+          font-weight: 600;
+          background: rgba(200,135,42,0.1);
+          color: var(--amber-d);
+          border: 1px solid rgba(200,135,42,0.2);
         }
 
-        .action-btn.edit:hover { color: var(--color-warning); }
-        .action-btn.delete:hover { color: var(--color-error); }
-        .action-btn.view:hover { color: var(--color-info); }
+        /* ── Stock Value ── */
+        .ad__stock-val {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          font-weight: 600;
+          font-variant-numeric: tabular-nums;
+        }
+        .ad__stock-val--low { color: #C94F3F; }
 
-        .badge-pending { background: var(--color-warning); color: white; }
-        .badge-processing { background: var(--color-info); color: white; }
-        .badge-shipped { background: var(--color-secondary); color: white; }
-        .badge-delivered { background: var(--color-success); color: white; }
-        .badge-cancelled { background: var(--color-error); color: white; }
-        .badge-completed { background: var(--color-success); color: white; }
-        .badge-failed { background: var(--color-error); color: white; }
+        /* ── Action Buttons ── */
+        .ad__actions { display: flex; gap: 8px; }
+        .ad__action-btn {
+          width: 34px;
+          height: 34px;
+          border-radius: 8px;
+          border: 1.5px solid transparent;
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          cursor: pointer;
+          font-size: 0.95rem;
+          transition: all 0.18s;
+          background: none;
+        }
+        .ad__action-btn--view { color: #3B82F6; border-color: rgba(59,130,246,0.2); background: rgba(59,130,246,0.06); }
+        .ad__action-btn--view:hover { background: rgba(59,130,246,0.12); border-color: #3B82F6; }
+        .ad__action-btn--edit { color: var(--amber-d); border-color: rgba(200,135,42,0.2); background: rgba(200,135,42,0.06); }
+        .ad__action-btn--edit:hover { background: rgba(200,135,42,0.12); border-color: var(--amber); }
+        .ad__action-btn--delete { color: #C94F3F; border-color: rgba(201,79,63,0.2); background: rgba(201,79,63,0.06); }
+        .ad__action-btn--delete:hover { background: rgba(201,79,63,0.12); border-color: #C94F3F; }
 
-        @media (max-width: 768px) {
-          .stats-grid {
-            grid-template-columns: 1fr;
-          }
+        /* ── Primary Button ── */
+        .ad__primary-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 8px;
+          padding: 11px 22px;
+          border-radius: 50px;
+          background: linear-gradient(135deg, var(--forest), var(--forest-d));
+          color: #fff;
+          font-size: 0.9rem;
+          font-weight: 700;
+          cursor: pointer;
+          border: none;
+          font-family: 'DM Sans', sans-serif;
+          box-shadow: 0 4px 14px rgba(46,90,76,0.3);
+          transition: box-shadow 0.2s;
+        }
+        .ad__primary-btn:hover { box-shadow: 0 6px 20px rgba(46,90,76,0.4); }
 
-          .dashboard-tabs {
-            flex-wrap: wrap;
-          }
+        /* ── Filter Bar ── */
+        .ad__filter-bar {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          flex-wrap: wrap;
+          gap: 12px;
+          background: #fff;
+          border: 1.5px solid rgba(200,135,42,0.12);
+          border-radius: 14px;
+          padding: 14px 20px;
+          margin-bottom: 20px;
+          box-shadow: 0 2px 8px rgba(26,18,8,0.04);
+        }
+        .ad__filter-left {
+          display: flex;
+          align-items: center;
+          gap: 12px;
+          flex-wrap: wrap;
+        }
+        .ad__filter-icon { color: #a08060; font-size: 1rem; }
+        .ad__filter-label { font-size: 0.82rem; font-weight: 700; color: #6b5c44; }
+        .ad__threshold-wrap {
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          font-size: 0.82rem;
+          color: #8a7055;
+        }
+        .ad__threshold-input {
+          width: 60px;
+          padding: 5px 8px;
+          border: 1.5px solid rgba(200,135,42,0.2);
+          border-radius: 8px;
+          font-size: 0.85rem;
+          text-align: center;
+          background: #fdf8f0;
+          color: var(--dark);
+          outline: none;
+          font-family: 'DM Sans', sans-serif;
+        }
+        .ad__threshold-input:focus { border-color: var(--amber); }
+        .ad__filter-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 7px;
+          padding: 8px 16px;
+          border-radius: 50px;
+          border: 1.5px solid rgba(200,135,42,0.25);
+          background: #fff;
+          color: #6b5c44;
+          font-size: 0.85rem;
+          font-weight: 600;
+          cursor: pointer;
+          font-family: 'DM Sans', sans-serif;
+          transition: all 0.2s;
+        }
+        .ad__filter-btn:hover:not(:disabled) { border-color: var(--amber); color: var(--amber-d); background: rgba(200,135,42,0.06); }
+        .ad__filter-btn--active { background: rgba(245,158,11,0.1); border-color: #F59E0B; color: #92400E; }
+        .ad__filter-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+        .ad__clear-btn {
+          display: inline-flex;
+          align-items: center;
+          gap: 5px;
+          padding: 7px 14px;
+          border-radius: 50px;
+          border: 1.5px solid rgba(239,68,68,0.2);
+          background: rgba(239,68,68,0.06);
+          color: #C94F3F;
+          font-size: 0.82rem;
+          font-weight: 600;
+          cursor: pointer;
+          font-family: 'DM Sans', sans-serif;
+          transition: all 0.2s;
+        }
+        .ad__clear-btn:hover { background: rgba(239,68,68,0.12); border-color: #C94F3F; }
+        .ad__filter-badge {
+          font-size: 0.8rem;
+          font-weight: 700;
+          color: #92400E;
+          background: rgba(245,158,11,0.12);
+          border: 1px solid rgba(245,158,11,0.25);
+          padding: 5px 12px;
+          border-radius: 50px;
+        }
 
-          .tab-btn {
-            flex: 1;
-            justify-content: center;
-          }
+        /* ── Count Badge ── */
+        .ad__count-badge {
+          font-size: 0.8rem;
+          font-weight: 600;
+          color: #8a7055;
+          background: rgba(200,135,42,0.08);
+          border: 1px solid rgba(200,135,42,0.15);
+          padding: 5px 12px;
+          border-radius: 50px;
+        }
+
+        /* ── Spinner ── */
+        .ad__spinner-sm {
+          display: inline-block;
+          width: 13px; height: 13px;
+          border: 2px solid rgba(0,0,0,0.12);
+          border-top-color: currentColor;
+          border-radius: 50%;
+          animation: ad-spin 0.7s linear infinite;
+        }
+        @keyframes ad-spin { to { transform: rotate(360deg); } }
+
+        /* ── Responsive ── */
+        @media (max-width: 900px) {
+          .ad__hero { padding: 40px 24px 32px; }
+          .ad__tabs { padding: 16px 24px 0; }
+          .ad__tab-content { padding: 24px; }
+        }
+        @media (max-width: 640px) {
+          .ad__stats-grid { grid-template-columns: 1fr 1fr; gap: 14px; }
+          .ad__tabs { gap: 0; overflow-x: auto; }
+          .ad__tab { padding: 10px 16px; font-size: 0.85rem; }
+          .ad__hero { flex-direction: column; }
+          .ad__refresh-btn { align-self: flex-start; }
+          .ad__tab-content { padding: 16px; }
+          .ad__filter-bar { flex-direction: column; align-items: flex-start; }
+        }
+        @media (max-width: 400px) {
+          .ad__stats-grid { grid-template-columns: 1fr; }
         }
       `}</style>
     </div>

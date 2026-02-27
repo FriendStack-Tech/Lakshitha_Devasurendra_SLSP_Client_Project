@@ -10,6 +10,10 @@ import LoginPage from './pages/LoginPage';
 import RegisterPage from './pages/RegisterPage';
 import DashboardPage from './pages/DashboardPage';
 import CartPage from './pages/CartPage';
+import AddProductPage from './pages/Addproductpage';
+import EditProductPage from './pages/Editproductpage';
+import AboutPage from './pages/AboutPage';
+import ContactPage from './pages/ContactPage';
 import './App.css';
 
 function App() {
@@ -32,6 +36,10 @@ function App() {
                 </PrivateRoute>
               } 
             />
+            <Route path="/admin/products/add"       element={<AddProductPage />} />
+            <Route path="/admin/products/:id/edit"  element={<EditProductPage />} />
+            <Route path="/about" element={<AboutPage />} />
+            <Route path="/contact" element={<ContactPage />} />
             <Route path="*" element={<Navigate to="/" />} />
           </Routes>
         </AnimatePresence>
