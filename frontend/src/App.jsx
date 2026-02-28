@@ -17,6 +17,7 @@ import ContactPage from './pages/ContactPage';
 
 import PaymentReturn from './pages/PaymentReturn';
 import PaymentCancel from './pages/PaymentCancel';
+import OrderTracking from './pages/OrderTracking';
 
 import './App.css';
 
@@ -48,6 +49,7 @@ function App() {
 
             <Route path="/payment/return" element={<PaymentReturn />} />
             <Route path="/payment/cancel" element={<PaymentCancel />} />
+            <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
 
           </Routes>
         </AnimatePresence>

@@ -1,12 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useNavigate } from 'react-router-dom';
 import {
   FiPackage, FiShoppingBag, FiUser, FiMapPin,
   FiClock, FiCheckCircle, FiXCircle, FiEye,
   FiCreditCard, FiTruck, FiEdit2, FiPlus, FiTrash2,
   FiStar, FiX, FiCheck, FiChevronRight, FiHome,
   FiPhone, FiRefreshCw, FiBarChart2, FiActivity,
-  FiAlertCircle, FiDollarSign
+  FiAlertCircle, FiDollarSign, FiShoppingCart, FiList
 } from 'react-icons/fi';
 import { useAuth } from '../../context/AuthContext';
 import { orderService } from '../../services/orderService';
@@ -29,6 +30,176 @@ const STATUS_META = {
 const getMeta = s => STATUS_META[s] || { icon:<FiPackage />, color:'#6B7280', bg:'rgba(107,114,128,0.1)', text:'#374151' };
 
 /* ─────────────────────────────────────────
+   ORDER DETAILS MODAL
+───────────────────────────────────────── */
+const OrderDetailsModal = ({ open, onClose, order }) => {
+  if (!open || !order) return null;
+  const meta = getMeta(order.OrderStatus);
+
+  return (
+    <motion.div className="ud-overlay"
+      initial={{ opacity:0 }} animate={{ opacity:1 }} exit={{ opacity:0 }}
+      onClick={onClose}
+    >
+      <motion.div className="ud-modal ud-modal--wide"
+        initial={{ opacity:0, scale:0.93, y:24 }}
+        animate={{ opacity:1, scale:1, y:0 }}
+        exit={{ opacity:0, scale:0.93, y:24 }}
+        transition={{ type:'spring', stiffness:320, damping:28 }}
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header colour bar */}
+        <div style={{ height:4, background:meta.color, borderRadius:'20px 20px 0 0' }} />
+
+        <div className="ud-modal__head" style={{ padding:'22px 24px 0' }}>
+          <div>
+            <span className="ud-modal__eyebrow">✦ Order Details</span>
+            <h3>Order <span style={{ fontFamily:'Courier New', fontSize:'0.95em', color:'#8a7055' }}>#{order.OrderID}</span></h3>
+          </div>
+          <div style={{ display:'flex', alignItems:'center', gap:10 }}>
+            <span className="ud__status-pill" style={{ background:meta.bg, color:meta.text }}>
+              <span style={{ width:7,height:7,borderRadius:'50%',background:meta.color,display:'inline-block',flexShrink:0 }} />
+              {order.OrderStatus}
+            </span>
+            <button className="ud-modal__close" onClick={onClose}><FiX /></button>
+          </div>
+        </div>
+
+        <div className="ud-modal__body">
+
+          {/* Order Meta Row */}
+          <div className="odm__meta-row">
+            <div className="odm__meta-chip">
+              <FiClock />
+              <div>
+                <label>Order Date</label>
+                <p>{new Date(order.OrderDate).toLocaleDateString('en-US',{ year:'numeric', month:'long', day:'numeric' })}</p>
+              </div>
+            </div>
+            <div className="odm__meta-chip">
+              <FiCreditCard />
+              <div>
+                <label>Payment</label>
+                <p>
+                  <span className={`ud__badge ud__badge--${(order.payment?.PaymentStatus||'').toLowerCase()}`}>
+                    {order.payment?.PaymentStatus || '—'}
+                  </span>
+                </p>
+              </div>
+            </div>
+            <div className="odm__meta-chip">
+              <FiTruck />
+              <div>
+                <label>Shipping</label>
+                <p>
+                  <span className={`ud__badge ud__badge--${(order.shipping?.ShippingStatus||'').toLowerCase().replace(' ','-')}`}>
+                    {order.shipping?.ShippingStatus || '—'}
+                  </span>
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Items */}
+          <div className="odm__section">
+            <h4 className="odm__section-title"><FiShoppingCart /> Items Ordered</h4>
+            <div className="odm__items">
+              {(order.items || []).map((item, i) => (
+                <motion.div key={item.OrderItemID || i} className="odm__item"
+                  initial={{ opacity:0, x:-10 }} animate={{ opacity:1, x:0 }} transition={{ delay:i*0.05 }}
+                >
+                  <div className="odm__item-img">
+                    {item.ProductImage
+                      ? <img src={item.ProductImage} alt={item.ProductName} />
+                      : <span>🌶️</span>
+                    }
+                  </div>
+                  <div className="odm__item-info">
+                    <p className="odm__item-name">{item.ProductName}</p>
+                    {item.ProductCategory && <p className="odm__item-cat">{item.ProductCategory}</p>}
+                    <p className="odm__item-sku">Qty: <strong>{item.Quantity}</strong>
+                      {item.Weight && <> · {item.Weight}</>}
+                    </p>
+                    <p className="odm__item-sku">Product: <strong>{item.ProductName}</strong>
+                      {item.Weight && <> · {item.Weight}</>}
+                    </p>
+                  </div>
+                  <div className="odm__item-pricing">
+                    <p className="odm__item-unit">Rs. {Number(item.UnitPrice).toLocaleString()} each</p>
+                    <p className="odm__item-total">Rs. {(item.UnitPrice * item.Quantity).toLocaleString()}</p>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* Pricing Summary */}
+          <div className="odm__section">
+            <h4 className="odm__section-title"><FiDollarSign /> Price Summary</h4>
+            <div className="odm__summary">
+              <div className="odm__summary-row">
+                <span>Subtotal</span>
+                <span>Rs. {(order.SubTotal ?? order.TotalAmount).toLocaleString()}</span>
+              </div>
+              {order.ShippingCost != null && (
+                <div className="odm__summary-row">
+                  <span>Shipping</span>
+                  <span>Rs. {Number(order.ShippingCost).toLocaleString()}</span>
+                </div>
+              )}
+              {order.Discount != null && order.Discount > 0 && (
+                <div className="odm__summary-row odm__summary-row--discount">
+                  <span>Discount</span>
+                  <span>− Rs. {Number(order.Discount).toLocaleString()}</span>
+                </div>
+              )}
+              <div className="odm__summary-row odm__summary-row--total">
+                <span>Total</span>
+                <strong>Rs. {Number(order.TotalAmount).toLocaleString()}</strong>
+              </div>
+            </div>
+          </div>
+
+          {/* Shipping Address */}
+          {order.shippingAddress && (
+            <div className="odm__section">
+              <h4 className="odm__section-title"><FiMapPin /> Delivery Address</h4>
+              <div className="odm__address">
+                <FiHome style={{ color:'#C8872A', flexShrink:0 }} />
+                <div>
+                  <p style={{ fontWeight:700, color:'#1A1208', marginBottom:4 }}>{order.shippingAddress.FullName}</p>
+                  <p>{[order.shippingAddress.AddressLine1, order.shippingAddress.AddressLine2].filter(Boolean).join(', ')}</p>
+                  <p>{[order.shippingAddress.City, order.shippingAddress.District, order.shippingAddress.Province, order.shippingAddress.PostalCode].filter(Boolean).join(', ')}</p>
+                  {order.shippingAddress.PhoneNumber && (
+                    <p style={{ display:'flex', alignItems:'center', gap:5, color:'#2E5A4C', fontWeight:600, marginTop:4 }}>
+                      <FiPhone /> {order.shippingAddress.PhoneNumber}
+                    </p>
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Notes */}
+          {order.Notes && (
+            <div className="odm__section">
+              <h4 className="odm__section-title"><FiList /> Order Notes</h4>
+              <p style={{ color:'#6b5c44', fontSize:'0.9rem', padding:'12px 16px', background:'#fdf8f0', borderRadius:10, border:'1px solid rgba(200,135,42,0.1)' }}>
+                {order.Notes}
+              </p>
+            </div>
+          )}
+        </div>
+
+        <div className="ud-modal__footer">
+          <button className="ud-btn ud-btn--ghost" onClick={onClose}>Close</button>
+        </div>
+      </motion.div>
+    </motion.div>
+  );
+};
+
+/* ─────────────────────────────────────────
    ADDRESS FORM MODAL
 ───────────────────────────────────────── */
 const AddressModal = ({ open, onClose, onSave, initial = null, saving = false }) => {
@@ -36,11 +207,7 @@ const AddressModal = ({ open, onClose, onSave, initial = null, saving = false })
 
   useEffect(() => {
     if (initial) {
-      setForm({
-        ...EMPTY_FORM,
-        ...initial,
-        PhoneNumber: initial.PhoneNumber ?? initial.Phone ?? '',
-      });
+      setForm({ ...EMPTY_FORM, ...initial, PhoneNumber: initial.PhoneNumber ?? initial.Phone ?? '' });
     } else {
       setForm(EMPTY_FORM);
     }
@@ -115,7 +282,7 @@ const AddressModal = ({ open, onClose, onSave, initial = null, saving = false })
             <motion.button type="submit" className="ud-btn ud-btn--primary"
               disabled={saving} whileHover={{ scale:1.03 }} whileTap={{ scale:0.97 }}
             >
-              {saving ? <span className="ud-spinner" /> : <FiCheck />}
+              {saving ? <span className="ud__spinner" /> : <FiCheck />}
               {initial ? 'Save Changes' : 'Add Address'}
             </motion.button>
           </div>
@@ -130,10 +297,15 @@ const AddressModal = ({ open, onClose, onSave, initial = null, saving = false })
 ───────────────────────────────────────── */
 const UserDashboard = () => {
   const { user } = useAuth();
+  const navigate = useNavigate();
 
   const [orders,          setOrders]          = useState([]);
   const [ordersLoading,   setOrdersLoading]   = useState(true);
   const [activeTab,       setActiveTab]       = useState('orders');
+
+  // Order details modal
+  const [detailsOrder,    setDetailsOrder]    = useState(null);
+  const [detailsOpen,     setDetailsOpen]     = useState(false);
 
   const [addresses,       setAddresses]       = useState([]);
   const [addrLoading,     setAddrLoading]     = useState(false);
@@ -226,6 +398,8 @@ const UserDashboard = () => {
   const openAdd  = ()     => { setEditTarget(null); setModalOpen(true); };
   const openEdit = (addr) => { setEditTarget(addr); setModalOpen(true); };
 
+  const openDetails = (order) => { setDetailsOrder(order); setDetailsOpen(true); };
+
   const totalSpent = orders.filter(o => o.OrderStatus === 'Delivered').reduce((s,o) => s + o.TotalAmount, 0);
 
   const tabs = [
@@ -237,7 +411,7 @@ const UserDashboard = () => {
   if (ordersLoading) return (
     <div className="ud-loading">
       <div className="ud-loading__spinner" />
-      <Loader message="Loading your dashboard" />;
+      <Loader message="Loading your dashboard" />
     </div>
   );
 
@@ -337,7 +511,7 @@ const UserDashboard = () => {
                       <div style={{ height:3, background:meta.color, borderRadius:'16px 16px 0 0' }} />
                       <div className="ud__order-head">
                         <div>
-                          <h3 className="ud__order-num">Order <span className="ud__mono">#{order.OrderNumber}</span></h3>
+                          <h3 className="ud__order-num">Order ID<span className="ud__mono">#{order.OrderID}</span></h3>
                           <p className="ud__order-date">
                             {new Date(order.OrderDate).toLocaleDateString('en-US',{ year:'numeric', month:'long', day:'numeric' })}
                           </p>
@@ -348,26 +522,41 @@ const UserDashboard = () => {
                         </span>
                       </div>
 
+                      {/* ── Enhanced Items Section ── */}
                       {order.items?.length > 0 && (
                         <div className="ud__order-items">
-                          {order.items.slice(0,2).map(item => (
+                          {order.items.slice(0,3).map(item => (
                             <div key={item.OrderItemID} className="ud__order-item">
                               <div className="ud__item-thumb">
                                 {item.ProductImage
                                   ? <img src={item.ProductImage} alt={item.ProductName} />
                                   : <span>🌶️</span>}
                               </div>
-                              <div style={{ flex:1 }}>
+                              <div style={{ flex:1, minWidth:0 }}>
                                 <p className="ud__item-name">{item.ProductName}</p>
-                                <p className="ud__item-qty">Qty: {item.Quantity}</p>
+                                {item.ProductCategory && (
+                                  <p className="ud__item-cat">{item.ProductCategory}</p>
+                                )}
+                                <p className="ud__item-qty">
+                                  Qty: <strong>{item.Quantity}</strong>
+                                  {item.Weight && <> · <span>{item.Weight}</span></>}
+                                </p>
                               </div>
-                              <strong className="ud__item-price">
-                                Rs. {(item.UnitPrice * item.Quantity).toLocaleString()}
-                              </strong>
+                              <div style={{ textAlign:'right', flexShrink:0 }}>
+                                <p className="ud__item-unit-price">Rs. {Number(item.UnitPrice).toLocaleString()}</p>
+                                <strong className="ud__item-price">
+                                  Rs. {(item.UnitPrice * item.Quantity).toLocaleString()}
+                                </strong>
+                              </div>
                             </div>
                           ))}
-                          {order.items.length > 2 && (
-                            <p className="ud__items-more">+{order.items.length-2} more items</p>
+                          {order.items.length > 3 && (
+                            <button
+                              className="ud__items-more-btn"
+                              onClick={() => openDetails(order)}
+                            >
+                              + {order.items.length - 3} more item{order.items.length - 3 > 1 ? 's' : ''} — View all
+                            </button>
                           )}
                         </div>
                       )}
@@ -376,13 +565,13 @@ const UserDashboard = () => {
                         <div className="ud__order-meta">
                           <span className="ud__order-meta-item">
                             <FiCreditCard />
-                            <span className={`ud__badge ud__badge--${order.payment?.PaymentStatus?.toLowerCase()}`}>
+                            <span className={`ud__badge ud__badge--${(order.payment?.PaymentStatus||'').toLowerCase()}`}>
                               {order.payment?.PaymentStatus || '—'}
                             </span>
                           </span>
                           <span className="ud__order-meta-item">
                             <FiTruck />
-                            <span className="ud__badge ud__badge--shipped">
+                            <span className={`ud__badge ud__badge--${(order.shipping?.ShippingStatus||'').toLowerCase().replace(' ','-')}`}>
                               {order.shipping?.ShippingStatus || '—'}
                             </span>
                           </span>
@@ -390,12 +579,20 @@ const UserDashboard = () => {
                         <div className="ud__order-right">
                           <p className="ud__order-total">Total: <strong>Rs. {order.TotalAmount.toLocaleString()}</strong></p>
                           <div className="ud__order-actions">
-                            <motion.button className="ud__action-btn ud__action-btn--view"
-                              whileHover={{ scale:1.12 }} whileTap={{ scale:0.9 }}
-                            ><FiEye /> Track</motion.button>
-                            <motion.button className="ud__action-btn ud__action-btn--primary"
+                            <motion.button
+                              className="ud__action-btn ud__action-btn--view"
+                              whileHover={{ scale:1.05 }} whileTap={{ scale:0.95 }}
+                              onClick={() => navigate(`/order-tracking/${order.OrderID}`)}
+                            >
+                              <FiTruck /> Track
+                            </motion.button>
+                            <motion.button
+                              className="ud__action-btn ud__action-btn--primary"
                               whileHover={{ scale:1.04 }} whileTap={{ scale:0.97 }}
-                            ><FiPackage /> Details</motion.button>
+                              onClick={() => openDetails(order)}
+                            >
+                              <FiEye /> Details
+                            </motion.button>
                           </div>
                         </div>
                       </div>
@@ -588,13 +785,6 @@ const UserDashboard = () => {
                   })}
                 </AnimatePresence>
 
-                {/*
-                  FIX: Removed background & borderColor from whileHover.
-                  Framer Motion cannot interpolate from CSS keyword "transparent"
-                  to an rgba() value — it resolves "transparent" to the full
-                  computed shorthand string which is not a valid colour.
-                  The hover tint is now handled entirely by the CSS :hover rule.
-                */}
                 <motion.div
                   className="ud__addr-add-card"
                   whileHover={{ y:-4 }}
@@ -607,6 +797,17 @@ const UserDashboard = () => {
               </div>
             )}
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ══ ORDER DETAILS MODAL ══ */}
+      <AnimatePresence>
+        {detailsOpen && (
+          <OrderDetailsModal
+            open={detailsOpen}
+            onClose={() => { setDetailsOpen(false); setDetailsOrder(null); }}
+            order={detailsOrder}
+          />
         )}
       </AnimatePresence>
 
@@ -651,6 +852,7 @@ const UserDashboard = () => {
           border-radius: 50%; animation: ud-spin 0.8s linear infinite;
         }
 
+        /* ── Hero ── */
         .ud__hero {
           position: relative;
           background: linear-gradient(135deg, #1A1208 0%, #2E5A4C 55%, #3d6b5a 100%);
@@ -682,7 +884,6 @@ const UserDashboard = () => {
         }
         .ud__hero-name { color: var(--amber-l); }
         .ud__hero-content > p { color: rgba(255,255,255,0.6); font-size: 1rem; margin: 0; }
-
         .ud__hero-stats {
           position: relative; z-index: 1;
           display: flex; background: rgba(255,255,255,0.07);
@@ -705,6 +906,7 @@ const UserDashboard = () => {
           color: rgba(255,255,255,0.42); margin-top: 3px; display: block;
         }
 
+        /* ── Tabs ── */
         .ud__tabs {
           display: flex; gap: 4px; padding: 20px 40px 0;
           border-bottom: 2px solid rgba(200,135,42,0.12); background: #fff;
@@ -724,9 +926,9 @@ const UserDashboard = () => {
           background: linear-gradient(90deg, var(--amber), var(--amber-l));
           border-radius: 2px 2px 0 0;
         }
-
         .ud__tab-content { padding: 36px 40px; max-width: 1400px; margin: 0 auto; }
 
+        /* ── Section headers ── */
         .ud__sec-header {
           display: flex; align-items: center; justify-content: space-between;
           flex-wrap: wrap; gap: 12px;
@@ -737,13 +939,13 @@ const UserDashboard = () => {
           font-size: 1.35rem; color: var(--dark); margin: 0;
         }
         .ud__sec-header--top { margin-bottom: 24px; }
-
         .ud__count-badge {
           font-size: 0.8rem; font-weight: 600; color: #8a7055;
           background: rgba(200,135,42,0.08); border: 1px solid rgba(200,135,42,0.15);
           padding: 5px 12px; border-radius: 50px; font-family: 'DM Sans', sans-serif;
         }
 
+        /* ── Empty state ── */
         .ud__empty { text-align: center; padding: 60px 20px; color: #8a7055; }
         .ud__empty-icon {
           width: 64px; height: 64px; margin: 0 auto 20px;
@@ -757,6 +959,7 @@ const UserDashboard = () => {
         }
         .ud__empty p { margin-bottom: 24px; font-size: 0.95rem; }
 
+        /* ── Buttons ── */
         .ud__primary-btn {
           display: inline-flex; align-items: center; gap: 8px;
           padding: 11px 22px; border-radius: 50px;
@@ -796,6 +999,7 @@ const UserDashboard = () => {
         .ud__action-btn--delete:hover { background: rgba(201,79,63,0.12); border-color: #C94F3F; }
         .ud__action-btn--delete:disabled { opacity:0.6; cursor:not-allowed; }
 
+        /* ── Order Cards ── */
         .ud__orders-list { display: flex; flex-direction: column; gap: 20px; }
         .ud__order-card {
           background: #fff; border-radius: 16px;
@@ -818,24 +1022,39 @@ const UserDashboard = () => {
           padding: 5px 14px; border-radius: 50px; font-size: 0.78rem; font-weight: 700;
         }
 
-        .ud__order-items { padding: 0 24px 14px; border-bottom: 1px solid rgba(200,135,42,0.08); }
+        /* ── Enhanced order items ── */
+        .ud__order-items {
+          padding: 0 24px 14px;
+          border-bottom: 1px solid rgba(200,135,42,0.08);
+        }
         .ud__order-item {
           display: flex; align-items: center; gap: 14px;
-          padding: 8px 0; border-bottom: 1px dashed rgba(200,135,42,0.07);
+          padding: 10px 0; border-bottom: 1px dashed rgba(200,135,42,0.07);
         }
-        .ud__order-item:last-child { border-bottom: none; }
+        .ud__order-item:last-of-type { border-bottom: none; }
         .ud__item-thumb {
-          width: 52px; height: 52px; border-radius: 10px;
+          width: 56px; height: 56px; border-radius: 10px;
           background: #fdf3e3; overflow: hidden; flex-shrink: 0;
           display: flex; align-items: center; justify-content: center;
-          font-size: 1.4rem; border: 1px solid rgba(200,135,42,0.12);
+          font-size: 1.5rem; border: 1px solid rgba(200,135,42,0.12);
         }
         .ud__item-thumb img { width:100%; height:100%; object-fit:cover; }
-        .ud__item-name { font-weight:600; color:var(--dark); font-size:0.9rem; margin-bottom:2px; }
+        .ud__item-name { font-weight:700; color:var(--dark); font-size:0.9rem; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .ud__item-cat  { font-size:0.72rem; color:var(--amber); font-weight:600; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:3px; }
         .ud__item-qty  { font-size:0.78rem; color:#8a7055; }
-        .ud__item-price { font-weight:700; color:var(--forest); font-size:0.9rem; white-space:nowrap; }
-        .ud__items-more { font-size:0.8rem; color:#a08060; padding-top:6px; }
+        .ud__item-qty strong { color:var(--dark); }
+        .ud__item-unit-price { font-size:0.75rem; color:#a08060; margin-bottom:2px; }
+        .ud__item-price { font-weight:700; color:var(--forest); font-size:0.92rem; display:block; }
+        .ud__items-more-btn {
+          display: block; width:100%; margin-top:8px; padding:7px;
+          text-align:center; font-size:0.8rem; font-weight:600; color:var(--amber-d);
+          background:rgba(200,135,42,0.05); border:1px dashed rgba(200,135,42,0.25);
+          border-radius:8px; cursor:pointer; transition:all 0.18s;
+          font-family:'DM Sans',sans-serif;
+        }
+        .ud__items-more-btn:hover { background:rgba(200,135,42,0.1); border-color:var(--amber); }
 
+        /* ── Order footer ── */
         .ud__order-foot {
           display: flex; align-items: center; justify-content: space-between;
           padding: 14px 24px; flex-wrap: wrap; gap: 12px;
@@ -847,6 +1066,7 @@ const UserDashboard = () => {
         .ud__order-total strong { color:var(--forest); font-size:1rem; }
         .ud__order-actions { display:flex; gap:8px; }
 
+        /* ── Badges ── */
         .ud__badge {
           display: inline-flex; align-items: center;
           padding: 4px 12px; border-radius: 50px;
@@ -861,6 +1081,7 @@ const UserDashboard = () => {
         .ud__badge--unpaid     { background:rgba(245,158,11,0.15);  color:#92400E; }
         .ud__badge--failed     { background:rgba(239,68,68,0.12);   color:#991B1B; }
 
+        /* ── Profile ── */
         .ud__profile-card {
           background: #fff; border-radius: 20px;
           border: 1.5px solid rgba(200,135,42,0.1);
@@ -904,7 +1125,6 @@ const UserDashboard = () => {
           padding: 3px 12px; border-radius: 20px;
           font-size: 0.72rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase;
         }
-
         .ud__profile-fields {
           display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
           gap: 1px; background: rgba(200,135,42,0.08);
@@ -921,15 +1141,12 @@ const UserDashboard = () => {
         }
         .ud__profile-field label {
           display: block; font-size: 0.7rem; font-weight: 700;
-          letter-spacing: 1.5px; text-transform: uppercase;
-          color: #a08060; margin-bottom: 4px;
+          letter-spacing: 1.5px; text-transform: uppercase; color: #a08060; margin-bottom: 4px;
         }
         .ud__profile-field p { font-size: 0.95rem; font-weight: 600; color: var(--dark); margin: 0; }
-
         .ud__profile-summary {
           display: flex; padding: 20px 24px; gap: 14px;
-          flex-wrap: wrap; border-top: 1px solid rgba(200,135,42,0.1);
-          background: #fdf8f0;
+          flex-wrap: wrap; border-top: 1px solid rgba(200,135,42,0.1); background: #fdf8f0;
         }
         .ud__summary-chip {
           flex: 1; min-width: 100px; text-align: center;
@@ -947,6 +1164,7 @@ const UserDashboard = () => {
           color: #8a7055; margin-top: 4px; display: block;
         }
 
+        /* ── Addresses ── */
         .ud__addr-grid {
           display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 20px;
         }
@@ -957,162 +1175,116 @@ const UserDashboard = () => {
           transition: all 0.25s; overflow: hidden; position: relative;
         }
         .ud__addr-card--default { border-color: rgba(200,135,42,0.4); }
-        .ud__addr-default-bar {
-          height: 3px;
-          background: linear-gradient(90deg, var(--amber), var(--amber-l));
-          border-radius: 16px 16px 0 0;
-        }
-        .ud__addr-card-head {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 16px 20px 8px;
-        }
-        .ud__addr-icon-wrap {
-          width: 36px; height: 36px; border-radius: 10px;
-          background: rgba(200,135,42,0.08); color: var(--amber);
-          display: flex; align-items: center; justify-content: center; font-size: 1rem;
-        }
-        .ud__addr-default-chip {
-          display: inline-flex; align-items: center; gap: 5px;
-          background: rgba(200,135,42,0.1); color: var(--amber-d);
-          border: 1px solid rgba(200,135,42,0.25);
-          padding: 3px 10px; border-radius: 20px;
-          font-size: 0.72rem; font-weight: 700;
-        }
+        .ud__addr-default-bar { height: 3px; background: linear-gradient(90deg, var(--amber), var(--amber-l)); border-radius: 16px 16px 0 0; }
+        .ud__addr-card-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px 8px; }
+        .ud__addr-icon-wrap { width: 36px; height: 36px; border-radius: 10px; background: rgba(200,135,42,0.08); color: var(--amber); display: flex; align-items: center; justify-content: center; font-size: 1rem; }
+        .ud__addr-default-chip { display: inline-flex; align-items: center; gap: 5px; background: rgba(200,135,42,0.1); color: var(--amber-d); border: 1px solid rgba(200,135,42,0.25); padding: 3px 10px; border-radius: 20px; font-size: 0.72rem; font-weight: 700; }
         .ud__addr-body { padding: 4px 20px 16px; }
         .ud__addr-name { font-weight: 700; color: var(--dark); margin-bottom: 8px; font-size: 0.95rem; }
         .ud__addr-line { color: #6b5c44; font-size: 0.84rem; margin-bottom: 3px; line-height: 1.5; }
-        .ud__addr-phone {
-          display: flex; align-items: center; gap: 6px;
-          color: var(--forest); font-size: 0.84rem; font-weight: 600; margin-top: 8px;
-        }
-        .ud__addr-foot {
-          display: flex; align-items: center; justify-content: space-between;
-          padding: 12px 20px; border-top: 1px solid rgba(200,135,42,0.08);
-          background: #fdf9f5; flex-wrap: wrap; gap: 8px;
-        }
-        .ud__addr-set-btn {
-          display: inline-flex; align-items: center; gap: 6px;
-          padding: 6px 14px; border-radius: 50px;
-          font-size: 0.78rem; font-weight: 600; cursor: pointer;
-          border: 1.5px solid rgba(200,135,42,0.25); background: none; color: #8a7055;
-          font-family: 'DM Sans', sans-serif; transition: all 0.18s;
-        }
-        .ud__addr-set-btn:hover:not(:disabled) {
-          border-color: var(--amber); color: var(--amber-d); background: rgba(200,135,42,0.06);
-        }
+        .ud__addr-phone { display: flex; align-items: center; gap: 6px; color: var(--forest); font-size: 0.84rem; font-weight: 600; margin-top: 8px; }
+        .ud__addr-foot { display: flex; align-items: center; justify-content: space-between; padding: 12px 20px; border-top: 1px solid rgba(200,135,42,0.08); background: #fdf9f5; flex-wrap: wrap; gap: 8px; }
+        .ud__addr-set-btn { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 50px; font-size: 0.78rem; font-weight: 600; cursor: pointer; border: 1.5px solid rgba(200,135,42,0.25); background: none; color: #8a7055; font-family: 'DM Sans', sans-serif; transition: all 0.18s; }
+        .ud__addr-set-btn:hover:not(:disabled) { border-color: var(--amber); color: var(--amber-d); background: rgba(200,135,42,0.06); }
         .ud__addr-set-btn:disabled { opacity: 0.6; cursor: not-allowed; }
         .ud__addr-actions { display: flex; gap: 8px; }
-
-        /*
-          FIX: "transparent" resolves to the full CSS computed shorthand which
-          Framer Motion cannot parse as a colour for animation. We use
-          rgba(0,0,0,0) instead so it stays as a proper colour value, and
-          the amber tint on hover is handled by pure CSS :hover (no Framer).
-        */
-        .ud__addr-add-card {
-          display: flex; flex-direction: column; align-items: center; justify-content: center;
-          gap: 12px; border-radius: 16px; padding: 40px 20px; cursor: pointer;
-          border: 2px dashed rgba(200,135,42,0.25);
-          background: rgba(0,0,0,0);
-          color: #a08060; font-size: 0.9rem; font-weight: 600;
-          transition: border-color 0.25s, background 0.25s;
-          min-height: 180px; font-family: 'DM Sans', sans-serif;
-        }
-        .ud__addr-add-card:hover {
-          border-color: #C8872A;
-          background: rgba(200,135,42,0.04);
-        }
-        .ud__addr-add-icon {
-          width: 44px; height: 44px; border-radius: 50%;
-          background: rgba(200,135,42,0.08); color: var(--amber);
-          display: flex; align-items: center; justify-content: center; font-size: 1.3rem;
-        }
-
-        .ud__addr-skeleton {
-          background: #fff; border-radius: 16px; padding: 20px;
-          border: 1.5px solid rgba(200,135,42,0.08);
-        }
-        .ud__skel {
-          height: 14px; border-radius: 6px; margin-bottom: 10px;
-          background: linear-gradient(90deg,#f0e8d8 25%,#fdf3e3 50%,#f0e8d8 75%);
-          background-size: 200% 100%; animation: ud-shimmer 1.4s infinite;
-        }
+        .ud__addr-add-card { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; border-radius: 16px; padding: 40px 20px; cursor: pointer; border: 2px dashed rgba(200,135,42,0.25); background: rgba(0,0,0,0); color: #a08060; font-size: 0.9rem; font-weight: 600; transition: border-color 0.25s, background 0.25s; min-height: 180px; font-family: 'DM Sans', sans-serif; }
+        .ud__addr-add-card:hover { border-color: #C8872A; background: rgba(200,135,42,0.04); }
+        .ud__addr-add-icon { width: 44px; height: 44px; border-radius: 50%; background: rgba(200,135,42,0.08); color: var(--amber); display: flex; align-items: center; justify-content: center; font-size: 1.3rem; }
+        .ud__addr-skeleton { background: #fff; border-radius: 16px; padding: 20px; border: 1.5px solid rgba(200,135,42,0.08); }
+        .ud__skel { height: 14px; border-radius: 6px; margin-bottom: 10px; background: linear-gradient(90deg,#f0e8d8 25%,#fdf3e3 50%,#f0e8d8 75%); background-size: 200% 100%; animation: ud-shimmer 1.4s infinite; }
         .ud__skel--title { height:18px; width:60%; margin-bottom:14px; }
         .ud__skel--sm    { width:40%; }
         @keyframes ud-shimmer { to { background-position:-200% 0; } }
 
-        .ud-overlay {
-          position: fixed; inset: 0; background: rgba(26,18,8,0.6);
-          backdrop-filter: blur(6px); z-index: 9000;
-          display: flex; align-items: center; justify-content: center; padding: 20px;
-        }
-        .ud-modal {
-          background: #fff; border-radius: 20px;
-          width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto;
-          box-shadow: 0 24px 80px rgba(26,18,8,0.28);
-          border: 1.5px solid rgba(200,135,42,0.15);
-        }
-        .ud-modal__head {
-          display: flex; align-items: flex-start; justify-content: space-between;
-          padding: 24px 24px 0;
-        }
-        .ud-modal__eyebrow {
-          display: block; font-size: 0.68rem; letter-spacing: 2.5px;
-          text-transform: uppercase; color: var(--amber); font-weight: 700; margin-bottom: 4px;
-        }
-        .ud-modal__head h3 {
-          font-family: 'Playfair Display', Georgia, serif;
-          font-size: 1.3rem; color: var(--dark); margin: 0;
-        }
-        .ud-modal__close {
-          width: 34px; height: 34px; border-radius: 10px;
-          border: 1.5px solid rgba(200,135,42,0.2); background: rgba(200,135,42,0.05);
-          color: #8a7055; display: flex; align-items: center;
-          justify-content: center; cursor: pointer; font-size: 1rem; transition: all 0.18s;
-        }
+        /* ── Modal shared ── */
+        .ud-overlay { position: fixed; inset: 0; background: rgba(26,18,8,0.6); backdrop-filter: blur(6px); z-index: 9000; display: flex; align-items: center; justify-content: center; padding: 20px; }
+        .ud-modal { background: #fff; border-radius: 20px; width: 100%; max-width: 560px; max-height: 90vh; overflow-y: auto; box-shadow: 0 24px 80px rgba(26,18,8,0.28); border: 1.5px solid rgba(200,135,42,0.15); }
+        .ud-modal--wide { max-width: 680px; }
+        .ud-modal__head { display: flex; align-items: flex-start; justify-content: space-between; padding: 24px 24px 0; }
+        .ud-modal__eyebrow { display: block; font-size: 0.68rem; letter-spacing: 2.5px; text-transform: uppercase; color: var(--amber); font-weight: 700; margin-bottom: 4px; }
+        .ud-modal__head h3 { font-family: 'Playfair Display', Georgia, serif; font-size: 1.3rem; color: var(--dark); margin: 0; }
+        .ud-modal__close { width: 34px; height: 34px; border-radius: 10px; border: 1.5px solid rgba(200,135,42,0.2); background: rgba(200,135,42,0.05); color: #8a7055; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 1rem; transition: all 0.18s; }
         .ud-modal__close:hover { background: rgba(239,68,68,0.08); border-color: #EF4444; color: #EF4444; }
         .ud-modal__form { padding: 20px 24px 24px; }
-
+        .ud-modal__body { padding: 20px 24px 4px; }
         .ud-modal__row { display: flex; gap: 14px; margin-bottom: 14px; }
         .ud-modal__row--full  { flex-direction: column; }
         .ud-modal__row--half  { flex-direction: row; }
         .ud-modal__field { display: flex; flex-direction: column; gap: 6px; flex: 1; }
-        .ud-modal__field label {
-          font-size: 0.7rem; font-weight: 700; letter-spacing: 1.5px;
-          text-transform: uppercase; color: var(--amber);
-        }
-        .ud-modal__input {
-          padding: 11px 14px;
-          border: 1.5px solid rgba(200,135,42,0.2);
-          border-radius: 10px; font-size: 0.9rem; color: var(--dark);
-          background: #fdf8f0; outline: none;
-          transition: border-color 0.2s, box-shadow 0.2s;
-          font-family: 'DM Sans', sans-serif; width: 100%; box-sizing: border-box;
-        }
+        .ud-modal__field label { font-size: 0.7rem; font-weight: 700; letter-spacing: 1.5px; text-transform: uppercase; color: var(--amber); }
+        .ud-modal__input { padding: 11px 14px; border: 1.5px solid rgba(200,135,42,0.2); border-radius: 10px; font-size: 0.9rem; color: var(--dark); background: #fdf8f0; outline: none; transition: border-color 0.2s, box-shadow 0.2s; font-family: 'DM Sans', sans-serif; width: 100%; box-sizing: border-box; }
         .ud-modal__input:focus { border-color: var(--amber); box-shadow: 0 0 0 3px rgba(200,135,42,0.1); }
         .ud-modal__input::placeholder { color: #b5956a; }
-
-        .ud-modal__footer {
-          display: flex; justify-content: flex-end; gap: 10px;
-          padding-top: 16px; border-top: 1px solid rgba(200,135,42,0.1);
-        }
-        .ud-btn {
-          display: inline-flex; align-items: center; gap: 7px;
-          padding: 10px 20px; border-radius: 50px; font-size: 0.88rem;
-          font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif;
-          transition: all 0.2s; border: none;
-        }
-        .ud-btn--primary {
-          background: linear-gradient(135deg, var(--forest), var(--forest-d));
-          color: #fff; box-shadow: 0 4px 14px rgba(46,90,76,0.3);
-        }
+        .ud-modal__footer { display: flex; justify-content: flex-end; gap: 10px; padding: 16px 24px 24px; border-top: 1px solid rgba(200,135,42,0.1); }
+        .ud-btn { display: inline-flex; align-items: center; gap: 7px; padding: 10px 20px; border-radius: 50px; font-size: 0.88rem; font-weight: 600; cursor: pointer; font-family: 'DM Sans', sans-serif; transition: all 0.2s; border: none; }
+        .ud-btn--primary { background: linear-gradient(135deg, var(--forest), var(--forest-d)); color: #fff; box-shadow: 0 4px 14px rgba(46,90,76,0.3); }
         .ud-btn--primary:hover:not(:disabled) { box-shadow: 0 6px 20px rgba(46,90,76,0.4); }
         .ud-btn--primary:disabled { opacity: 0.7; cursor: not-allowed; }
-        .ud-btn--ghost {
-          background: none; border: 1.5px solid rgba(200,135,42,0.25); color: #6b5c44;
-        }
+        .ud-btn--ghost { background: none; border: 1.5px solid rgba(200,135,42,0.25); color: #6b5c44; }
         .ud-btn--ghost:hover { border-color: var(--amber); color: var(--amber-d); background: rgba(200,135,42,0.05); }
 
+        /* ── Order Details Modal ── */
+        .odm__meta-row {
+          display: grid; grid-template-columns: repeat(3, 1fr);
+          gap: 12px; margin-bottom: 20px;
+        }
+        .odm__meta-chip {
+          display: flex; align-items: flex-start; gap: 10px;
+          padding: 14px; background: #fdf8f0;
+          border: 1px solid rgba(200,135,42,0.12); border-radius: 12px;
+          font-size: 0.88rem; color: var(--amber);
+        }
+        .odm__meta-chip > svg { flex-shrink:0; margin-top:3px; }
+        .odm__meta-chip label { display:block; font-size:0.65rem; font-weight:700; letter-spacing:1.5px; text-transform:uppercase; color:#a08060; margin-bottom:4px; }
+        .odm__meta-chip p { margin:0; color:var(--dark); font-size:0.85rem; font-weight:600; }
+
+        .odm__section { margin-bottom: 20px; }
+        .odm__section-title {
+          display: flex; align-items: center; gap: 8px;
+          font-family: 'Playfair Display', Georgia, serif;
+          font-size: 1rem; color: var(--dark); margin-bottom: 12px;
+          padding-bottom: 8px; border-bottom: 1px solid rgba(200,135,42,0.1);
+        }
+
+        .odm__items { display:flex; flex-direction:column; gap:4px; }
+        .odm__item { display:flex; align-items:center; gap:14px; padding:10px 14px; background:#fdf9f5; border-radius:12px; border:1px solid rgba(200,135,42,0.08); }
+        .odm__item-img { width:60px; height:60px; border-radius:10px; background:#fff; border:1px solid rgba(200,135,42,0.15); overflow:hidden; display:flex; align-items:center; justify-content:center; font-size:1.6rem; flex-shrink:0; }
+        .odm__item-img img { width:100%; height:100%; object-fit:cover; }
+        .odm__item-info { flex:1; min-width:0; }
+        .odm__item-name { font-weight:700; color:var(--dark); font-size:0.9rem; margin-bottom:2px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+        .odm__item-cat { font-size:0.7rem; color:var(--amber); font-weight:600; text-transform:uppercase; letter-spacing:0.8px; margin-bottom:3px; }
+        .odm__item-sku { font-size:0.78rem; color:#8a7055; }
+        .odm__item-sku strong { color:var(--dark); }
+        .odm__item-pricing { text-align:right; flex-shrink:0; }
+        .odm__item-unit { font-size:0.74rem; color:#a08060; margin-bottom:3px; }
+        .odm__item-total { font-weight:700; color:var(--forest); font-size:0.95rem; }
+
+        .odm__summary {
+          background:#fdf9f5; border-radius:12px;
+          border:1px solid rgba(200,135,42,0.1); overflow:hidden;
+        }
+        .odm__summary-row {
+          display:flex; justify-content:space-between; align-items:center;
+          padding:11px 16px; border-bottom:1px solid rgba(200,135,42,0.07);
+          font-size:0.9rem; color:#6b5c44;
+        }
+        .odm__summary-row:last-child { border-bottom:none; }
+        .odm__summary-row--discount { color:#EF4444; }
+        .odm__summary-row--total {
+          background:rgba(200,135,42,0.05);
+          font-size:1rem; font-weight:700; color:var(--dark);
+        }
+        .odm__summary-row--total strong { color:var(--forest); font-size:1.05rem; }
+
+        .odm__address {
+          display:flex; align-items:flex-start; gap:12px;
+          padding:14px 16px; background:#fdf9f5;
+          border-radius:12px; border:1px solid rgba(200,135,42,0.1);
+          color:#6b5c44; font-size:0.88rem; line-height:1.7;
+        }
+
+        /* ── Spinner ── */
         .ud__spinner, .ud-spinner {
           display: inline-block; width: 13px; height: 13px;
           border: 2px solid rgba(255,255,255,0.3); border-top-color: currentColor;
@@ -1120,6 +1292,7 @@ const UserDashboard = () => {
         }
         @keyframes ud-spin { to { transform: rotate(360deg); } }
 
+        /* ── Responsive ── */
         @media (max-width: 900px) {
           .ud__hero { padding: 40px 24px 32px; }
           .ud__tabs { padding: 16px 24px 0; }
@@ -1139,6 +1312,7 @@ const UserDashboard = () => {
           .ud__refresh-btn { align-self: center; }
           .ud__profile-fields { grid-template-columns: 1fr; }
           .ud__profile-summary { justify-content: center; }
+          .odm__meta-row { grid-template-columns: 1fr; }
         }
         @media (max-width: 400px) {
           .ud__summary-chip { min-width: 80px; }
