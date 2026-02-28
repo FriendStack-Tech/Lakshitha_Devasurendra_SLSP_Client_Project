@@ -5,7 +5,7 @@ const InventoryTransaction = require('../models/InventoryTransaction');
 const Payment = require('../models/Payment');
 const ShippingDetail = require('../models/ShippingDetail');
 
-const SHIPPING_FEE = 350; // ✅ Single source of truth
+const SHIPPING_FEE = 350;
 
 // @desc    Create new order
 // @route   POST /api/orders

@@ -15,12 +15,12 @@ function generatePayHereHash(merchantId, orderId, amount, currency, merchantSecr
   const hashedSecret    = md5(merchantSecret).toUpperCase();
   const hashInput       = merchantId + orderId + formattedAmount + currency + hashedSecret;
 
-  console.log('=== Hash Debug ===');
-  console.log('merchantId    :', JSON.stringify(merchantId));
-  console.log('orderId       :', JSON.stringify(orderId));
-  console.log('amount        :', JSON.stringify(formattedAmount));
-  console.log('hashedSecret  :', hashedSecret);
-  console.log('hashInput     :', hashInput);
+  // console.log('=== Hash Debug ===');
+  // console.log('merchantId    :', JSON.stringify(merchantId));
+  // console.log('orderId       :', JSON.stringify(orderId));
+  // console.log('amount        :', JSON.stringify(formattedAmount));
+  // console.log('hashedSecret  :', hashedSecret);
+  // console.log('hashInput     :', hashInput);
 
   return md5(hashInput).toUpperCase();
 }
@@ -136,8 +136,8 @@ exports.getAllPayments = async (req, res, next) => {
 // @route   POST /api/payments/initiate
 // @access  Private
 exports.initiatePayment = async (req, res) => {
-  console.log('🔑 SECRET BEING USED:', JSON.stringify(process.env.PAYHERE_SECRET));
-  console.log('🔑 FROM CONFIG      :', JSON.stringify(config.PAYHERE_SECRET));
+  // console.log('🔑 SECRET BEING USED:', JSON.stringify(process.env.PAYHERE_SECRET));
+  // console.log('🔑 FROM CONFIG      :', JSON.stringify(config.PAYHERE_SECRET));
 
   try {
     const { orderId } = req.body;
@@ -182,13 +182,13 @@ exports.initiatePayment = async (req, res) => {
       merchantSecret
     );
 
-    console.log('=== FINAL PARAMS SENT TO PAYHERE ===');
-    console.log('merchant_id :', merchantId);
-    console.log('order_id    :', payhereOrderId);
-    console.log('amount      :', parseFloat(amount).toFixed(2));
-    console.log('currency    :', currency);
-    console.log('hash        :', hash);
-    console.log('====================================');
+    // console.log('=== FINAL PARAMS SENT TO PAYHERE ===');
+    // console.log('merchant_id :', merchantId);
+    // console.log('order_id    :', payhereOrderId);
+    // console.log('amount      :', parseFloat(amount).toFixed(2));
+    // console.log('currency    :', currency);
+    // console.log('hash        :', hash);
+    // console.log('====================================');
 
     res.status(200).json({
       success: true,
