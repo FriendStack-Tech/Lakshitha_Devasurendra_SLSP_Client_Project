@@ -37,7 +37,10 @@ const HomePage = () => {
       .then(r => r.json())
       .then(data => {
         const arr = Array.isArray(data) ? data : data.products || [];
-        setProducts(arr.slice(-5).reverse());
+        const latest = [...arr]
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+          .slice(0, 5);
+        setProducts(latest);
       })
       .catch(() => setProducts([]))
       .finally(() => setLoadingProducts(false));
@@ -226,49 +229,88 @@ const HomePage = () => {
             <p className="hp-products__empty">No products available at the moment.</p>
           ) : (
             <div className="hp-products__grid">
-              {products.map((product, i) => (
-                <motion.div
-                  key={product._id || product.id || i}
-                  className="hp-prod-card"
-                  initial={{ opacity: 0, y: 30 }}
-                  whileInView={{ opacity: 1, y: 0 }}
-                  viewport={{ once: true }}
-                  transition={{ delay: i * 0.1 }}
-                  whileHover={{ y: -6 }}
-                >
-                  <div className="hp-prod-card__img-wrap">
-                    {product.image || product.imageUrl ? (
-                      <img
-                        src={product.image || product.imageUrl}
-                        alt={product.name}
-                        onError={e => { e.target.style.display = 'none'; e.target.nextSibling.style.display = 'flex'; }}
-                      />
-                    ) : null}
-                    <div className="hp-prod-card__placeholder">🌿</div>
-                    <div className="hp-prod-card__actions">
-                      <Link to={`/shop/${product._id || product.id}`} className="hp-prod-card__action-btn">
-                        <FiEye />
-                      </Link>
-                      <button className="hp-prod-card__action-btn">
-                        <FiShoppingCart />
-                      </button>
+              {products.map((product, i) => {
+                // ✅ Support all common field name variants from the API
+                const imgSrc =
+                  product.ImageURL ||
+                  product.imageURL ||
+                  product.imageUrl ||
+                  product.image_url ||
+                  product.image ||
+                  null;
+
+                const productId = product._id || product.ProductID || product.id;
+
+                const productName =
+                  product.ProductName || product.name || 'Unnamed Product';
+
+                const category =
+                  product.Category || product.category || 'Spice';
+
+                const price =
+                  product.Price ?? product.price ?? null;
+
+                return (
+                  <motion.div
+                    key={productId || i}
+                    className="hp-prod-card"
+                    initial={{ opacity: 0, y: 30 }}
+                    whileInView={{ opacity: 1, y: 0 }}
+                    viewport={{ once: true }}
+                    transition={{ delay: i * 0.1 }}
+                    whileHover={{ y: -6 }}
+                  >
+                    <div className="hp-prod-card__img-wrap">
+                      {imgSrc ? (
+                        <img
+                          src={imgSrc}
+                          alt={productName}
+                          onError={e => {
+                            // If URL is broken, hide img and show placeholder
+                            e.target.style.display = 'none';
+                            e.target.parentElement
+                              .querySelector('.hp-prod-card__placeholder')
+                              .style.display = 'flex';
+                          }}
+                        />
+                      ) : null}
+
+                      {/* Placeholder: shown when no URL, or URL fails to load */}
+                      <div
+                        className="hp-prod-card__placeholder"
+                        style={{ display: imgSrc ? 'none' : 'flex' }}
+                      >
+                        🌿
+                      </div>
+
+                      <div className="hp-prod-card__actions">
+                        <Link
+                          to={`/shop/${productId}`}
+                          className="hp-prod-card__action-btn"
+                        >
+                          <FiEye />
+                        </Link>
+                        <button className="hp-prod-card__action-btn">
+                          <FiShoppingCart />
+                        </button>
+                      </div>
+                      <span className="hp-prod-card__badge">New</span>
                     </div>
-                    <span className="hp-prod-card__badge">New</span>
-                  </div>
-                  <div className="hp-prod-card__info">
-                    <span className="hp-prod-card__cat">{product.category || 'Spice'}</span>
-                    <h4>{product.name}</h4>
-                    <div className="hp-prod-card__footer">
-                      <strong className="hp-prod-card__price">
-                        {product.price ? `$${Number(product.price).toFixed(2)}` : 'View Price'}
-                      </strong>
-                      <Link to={`/shop/${product._id || product.id}`} className="hp-btn hp-btn--xs">
-                        Buy Now
-                      </Link>
+
+                    <div className="hp-prod-card__info">
+                      <span className="hp-prod-card__cat">{category}</span>
+                      <h4>{productName}</h4>
+                      <div className="hp-prod-card__footer">
+                        <strong className="hp-prod-card__price">
+                          {price != null
+                            ? `Rs. ${Number(price).toLocaleString()}`
+                            : 'View Price'}
+                        </strong>
+                      </div>
                     </div>
-                  </div>
-                </motion.div>
-              ))}
+                  </motion.div>
+                );
+              })}
             </div>
           )}
 
