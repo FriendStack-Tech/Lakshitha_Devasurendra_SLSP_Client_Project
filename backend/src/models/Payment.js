@@ -14,7 +14,7 @@ const paymentSchema = new mongoose.Schema({
   },
   PaymentMethod: {
     type: String,
-    enum: ['Credit Card', 'Debit Card', 'Bank Transfer', 'Cash on Delivery', 'Digital Wallet'],
+    enum: ['Credit Card', 'Debit Card', 'Bank Transfer', 'Cash on Delivery', 'PayHere'],
     required: true
   },
   Currency: {
@@ -35,8 +35,20 @@ const paymentSchema = new mongoose.Schema({
   PaymentDate: {
     type: Date,
     default: Date.now
-  }
-});
+  },
+  PayherePaymentID: { 
+    type: String 
+  },
+  StatusCode: { 
+    type: Number 
+  },    // 2=success, 0=pending, -1=cancelled, -2=failed
+  Method: { 
+    type: String 
+  },     // VISA, MASTER, etc.
+  StatusMessage: { 
+    type: String 
+  },
+}, { timestamps: true });
 
 /**
  * Generate PaymentID safely

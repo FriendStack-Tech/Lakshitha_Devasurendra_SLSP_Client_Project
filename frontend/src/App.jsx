@@ -14,6 +14,11 @@ import AddProductPage from './pages/Addproductpage';
 import EditProductPage from './pages/Editproductpage';
 import AboutPage from './pages/AboutPage';
 import ContactPage from './pages/ContactPage';
+
+import PaymentReturn from './pages/PaymentReturn';
+import PaymentCancel from './pages/PaymentCancel';
+import OrderTracking from './pages/OrderTracking';
+
 import './App.css';
 
 function App() {
@@ -41,6 +46,11 @@ function App() {
             <Route path="/about" element={<AboutPage />} />
             <Route path="/contact" element={<ContactPage />} />
             <Route path="*" element={<Navigate to="/" />} />
+
+            <Route path="/payment/return" element={<PaymentReturn />} />
+            <Route path="/payment/cancel" element={<PaymentCancel />} />
+            <Route path="/order-tracking/:orderId" element={<OrderTracking />} />
+
           </Routes>
         </AnimatePresence>
       </main>
