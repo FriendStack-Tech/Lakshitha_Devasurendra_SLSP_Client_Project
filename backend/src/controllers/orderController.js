@@ -5,6 +5,8 @@ const InventoryTransaction = require('../models/InventoryTransaction');
 const Payment = require('../models/Payment');
 const ShippingDetail = require('../models/ShippingDetail');
 
+const SHIPPING_FEE = 350;
+
 // @desc    Create new order
 // @route   POST /api/orders
 // @access  Private
@@ -12,10 +14,8 @@ exports.createOrder = async (req, res, next) => {
   try {
     const { items, shippingAddress, paymentMethod } = req.body;
 
-    /**
-     * 1️⃣ Validate products & stock
-     */
-    let totalAmount = 0;
+    // 1️⃣ Validate products & stock
+    let subtotal = 0;
     const validatedItems = [];
 
     for (const item of items) {
@@ -40,20 +40,21 @@ exports.createOrder = async (req, res, next) => {
         UnitPrice: product.Price
       });
 
-      totalAmount += product.Price * item.Quantity;
+      subtotal += product.Price * item.Quantity;
     }
 
-    /**
-     * 2️⃣ Create Order (IDs auto-generated)
-     */
+    // ✅ Total = subtotal + shipping
+    const totalAmount = subtotal + SHIPPING_FEE;
+
+    // 2️⃣ Create Order
     const order = await Order.create({
       UserID: req.user.UserID,
-      TotalAmount: totalAmount
+      SubTotal: subtotal,          // ✅ Store subtotal separately
+      ShippingFee: SHIPPING_FEE,   // ✅ Store shipping separately
+      TotalAmount: totalAmount     // ✅ Store full total (used for PayHere hash)
     });
 
-    /**
-     * 3️⃣ Create order items + update stock + inventory log
-     */
+    // 3️⃣ Create order items + update stock + inventory log
     for (const item of validatedItems) {
       await OrderItem.create({
         OrderID: order.OrderID,
@@ -75,20 +76,16 @@ exports.createOrder = async (req, res, next) => {
       });
     }
 
-    /**
-     * 4️⃣ Payment record
-     */
+    // 4️⃣ Payment record
     await Payment.create({
       OrderID: order.OrderID,
       PaymentMethod: paymentMethod || 'Cash on Delivery',
-      Amount: totalAmount,
+      Amount: totalAmount,        // ✅ Full amount including shipping
       Currency: 'LKR',
       PaymentStatus: 'Pending'
     });
 
-    /**
-     * 5️⃣ Shipping details
-     */
+    // 5️⃣ Shipping details
     await ShippingDetail.create({
       OrderID: order.OrderID,
       ShippingAddress: shippingAddress,
@@ -96,36 +93,33 @@ exports.createOrder = async (req, res, next) => {
       ShippingStatus: 'Pending'
     });
 
-    /**
-     * 6️⃣ Return full order details
-     */
+    // 6️⃣ Return full order details
     const orderDetails = await exports.getOrderDetails(order.OrderID);
 
     res.status(201).json({
       success: true,
-      order: orderDetails
+      data: {                      // ✅ Wrapped in data to match frontend: res.data.data
+        order: orderDetails
+      }
     });
+
   } catch (error) {
     next(error);
   }
 };
 
-
-// @desc    Get all orders (Admin/Staff) or user orders (Customer)
+// @desc    Get all orders
 // @route   GET /api/orders
 // @access  Private
 exports.getOrders = async (req, res, next) => {
   try {
     let query = {};
-    
-    // If customer, only show their orders
     if (req.user.Role === 'Customer') {
       query.UserID = req.user.UserID;
     }
 
     const orders = await Order.find(query).sort({ OrderDate: -1 });
 
-    // Get details for each order
     const ordersWithDetails = await Promise.all(
       orders.map(order => exports.getOrderDetails(order.OrderID))
     );
@@ -154,7 +148,6 @@ exports.getOrder = async (req, res, next) => {
       });
     }
 
-    // Check authorization
     if (req.user.Role === 'Customer' && order.UserID !== req.user.UserID) {
       return res.status(403).json({
         success: false,
@@ -202,20 +195,19 @@ exports.updateOrderStatus = async (req, res, next) => {
   }
 };
 
-// Helper function to get complete order details
-exports.getOrderDetails = async function(orderId) {
-  const order = await Order.findOne({ OrderID: orderId });
-  const items = await OrderItem.find({ OrderID: orderId });
-  const payment = await Payment.findOne({ OrderID: orderId });
+// Helper: get complete order details
+exports.getOrderDetails = async function (orderId) {
+  const order    = await Order.findOne({ OrderID: orderId });
+  const items    = await OrderItem.find({ OrderID: orderId });
+  const payment  = await Payment.findOne({ OrderID: orderId });
   const shipping = await ShippingDetail.findOne({ OrderID: orderId });
 
-  // Get product details for each item
   const itemsWithDetails = await Promise.all(
     items.map(async (item) => {
       const product = await Product.findOne({ ProductID: item.ProductID });
       return {
         ...item.toObject(),
-        ProductName: product?.ProductName,
+        ProductName:  product?.ProductName,
         ProductImage: product?.ImageURL
       };
     })
@@ -223,7 +215,8 @@ exports.getOrderDetails = async function(orderId) {
 
   return {
     ...order.toObject(),
-    items: itemsWithDetails,
+    items,
+    itemsWithDetails,
     payment,
     shipping
   };
