@@ -118,24 +118,6 @@ const PaymentReturn = () => {
     checkStatus();
 }, []);
 
-//   /* Payment status check */
-//   useEffect(() => {
-//     const id = localStorage.getItem('pendingOrderId');
-//     if (!id) { navigate('/'); return; }
-//     setOrderId(id);
-
-//     const checkStatus = async () => {
-//       try {
-//         const data = await paymentService.getPaymentStatus(id);
-//         setStatus(data.PaymentStatus ?? 'error');
-//         localStorage.removeItem('pendingOrderId');
-//       } catch {
-//         setStatus('error');
-//       }
-//     };
-//     checkStatus();
-//   }, []);
-
   const cfg = getConfig(status);
 
   return (
